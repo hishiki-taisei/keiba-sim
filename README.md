@@ -26,6 +26,27 @@ cd web && python3 -m http.server # http://localhost:8000 で表示
 `web/` はそのまま Cloudflare Pages に置ける静的サイトです。
 別のレースは `web/data/<名前>.json` に置き、`?race=<名前>` で表示します。
 
+## データ収集（`scraper/`）
+
+netkeiba のレース結果ページ（db.netkeiba.com）から、JRA全レースの結果を SQLite に集めます。
+アクセスは1.2秒＋ゆらぎの間隔を空け、403/429/5xx のときは長めに待ちます。取得したページは
+`data/raw/` に gzip で保存するので、同じページを二度取りに行きません。
+
+```bash
+scripts/collect.sh                    # 2015年1月〜今日まで。止めても再実行で続きから
+python3 -m scraper status             # 進み具合
+python3 -m scraper reparse            # パーサーを直したあと、保存済みページから作り直す
+```
+
+| テーブル | 中身 |
+|---|---|
+| `races` | 日付、競馬場、芝/ダ/障、距離、回り、天候、馬場、クラス、ラップ、コーナー通過順 |
+| `results` | 着順、枠・馬番、馬・騎手・調教師ID、性齢、斤量、タイム、通過順、上がり3F、単勝オッズ、人気、馬体重 |
+| `payouts` | 単勝〜三連単の払戻金と人気 |
+| `horses` | 父・母・母父・父父（血統ページから） |
+
+DB（`data/keiba.sqlite`）は大きいのでリポジトリには入れていません。
+
 ## 計画
 
 1. データ収集：過去10年ほどのJRAのレース結果・馬・血統・騎手・オッズ・タイム
