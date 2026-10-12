@@ -10,7 +10,8 @@ snap() { [ -n "${SNAPSHOT:-}" ] && python3 -m scraper snapshot --out "$SNAPSHOT"
 
 python3 -m scraper days --from "$FROM"
 snap
-while python3 -m scraper status | grep -q "'todo'"; do
+# (grep -c, not grep -q: -q closes the pipe early and pipefail would end the loop)
+while [ "$(python3 -m scraper status 2>/dev/null | grep -c "'todo'")" -gt 0 ]; do
   python3 -m scraper races --limit "$CHUNK"
   snap
 done
