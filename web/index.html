@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>競馬シミュレーター</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>競馬シミュレーター</h1>
+  <p id="subtitle"></p>
+</header>
+<main>
+  <p id="note" class="note" hidden></p>
+
+  <section class="stage">
+    <div class="canvas-wrap">
+      <canvas id="track" aria-label="レースのアニメーション"></canvas>
+      <div class="hud">
+        <span id="clock">0.0秒</span>
+        <span id="remain">残り 3000m</span>
+      </div>
+    </div>
+    <aside class="standings">
+      <h2>現在の順位</h2>
+      <ol id="standings"></ol>
+    </aside>
+  </section>
+
+  <div class="controls">
+    <button id="play" type="button">▶ 再生</button>
+    <button id="restart" type="button">最初から</button>
+    <label>速度
+      <select id="speed">
+        <option value="1">1倍</option>
+        <option value="3">3倍</option>
+        <option value="6" selected>6倍</option>
+        <option value="12">12倍</option>
+      </select>
+    </label>
+    <label>視点
+      <select id="view">
+        <option value="full">コース全体</option>
+        <option value="follow">先頭を追う</option>
+      </select>
+    </label>
+    <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="再生位置">
+  </div>
+
+  <section>
+    <h2>シミュレーション結果 <small id="nsim"></small></h2>
+    <div class="table-wrap">
+      <table id="table">
+        <thead>
+          <tr>
+            <th data-k="gate">馬番</th>
+            <th data-k="name" class="left">馬名</th>
+            <th data-k="style">脚質</th>
+            <th data-k="win">勝率</th>
+            <th data-k="place">複勝率</th>
+            <th data-k="mean_rank">平均着順</th>
+            <th data-k="odds">オッズ</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
