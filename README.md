@@ -26,6 +26,27 @@ cd web && python3 -m http.server # http://localhost:8000 で表示
 `web/` はそのまま Cloudflare Pages に置ける静的サイトです。
 別のレースは `web/data/<名前>.json` に置き、`?race=<名前>` で表示します。
 
+## 予想モデル（`predict/`）
+
+過去走から作った特徴量で、同じレースの馬どうしを比べる条件付きロジット（Benter型）で勝率を出します。
+numpy と pandas だけで動きます。
+
+- `predict/data.py`：SQLite（`data/keiba.sqlite`、`--db` か環境変数 `KEIBA_DB` で変更可）を読み取り専用で開く
+- `predict/features.py`：レース当日より前の走りだけを使った特徴量（スピード指数、上がり、着順、賞金、騎手・調教師の成績、距離変更、間隔など）
+- `predict/model.py`：条件付きロジット（ニュートン法 + L2）
+- `predict/evaluate.py`：logloss、1番手の勝率・複勝率、単複の回収率
+
+```bash
+# 日付で学習(〜2024) / 検証(2025) / テスト(2026〜) に分けて評価 → reports/backtest.md
+python3 scripts/backtest.py --db data/keiba.sqlite --valid-start 2025-01-01 --test-start 2026-01-01
+
+# 出走予定馬の勝率 → reports/kikka2026.md
+python3 scripts/predict_race.py races/kikka2026.csv --db data/keiba.sqlite --date 2026-10-25 --name 第87回菊花賞 --out reports/kikka2026.md
+```
+
+データが増えたら同じコマンドを再実行するだけです。`races/kikka2026.csv` は登録・枠順が出たら更新します
+（`number`、`weight_carried`、`odds` 列を足すとそれも使います）。
+
 ## 計画
 
 1. データ収集：過去10年ほどのJRAのレース結果・馬・血統・騎手・オッズ・タイム
