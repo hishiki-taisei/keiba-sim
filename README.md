@@ -28,12 +28,14 @@ cd web && python3 -m http.server # http://localhost:8000 で表示
 
 ## 予想モデル（`predict/`）
 
-過去走から作った特徴量で、同じレースの馬どうしを比べる条件付きロジット（Benter型）で勝率を出します。
-numpy と pandas だけで動きます。
+過去走から作った特徴量で、同じレースの馬どうしを比べて勝率を出します。numpy と pandas だけで動きます。
+改善の経緯と結果は `reports/pdca.md` にあります。
 
 - `predict/data.py`：SQLite（`data/keiba.sqlite`、`--db` か環境変数 `KEIBA_DB` で変更可）を読み取り専用で開く
 - `predict/features.py`：レース当日より前の走りだけを使った特徴量（スピード指数、上がり、着順、賞金、騎手・調教師の成績、距離変更、間隔など）
-- `predict/model.py`：条件付きロジット（ニュートン法 + L2）
+- `predict/model.py`：条件付きロジット（ニュートン法 + L2）。比較用の線形モデル
+- `predict/gbm.py`：レース内ソフトマックスを損失にした勾配ブースティング木（本命モデル）
+- `predict/pipeline.py`：乱数違いの木3本の平均。オッズなしの能力モデルと、確定オッズを補正する市場補正モデル
 - `predict/evaluate.py`：logloss、1番手の勝率・複勝率、単複の回収率
 
 ```bash
@@ -45,7 +47,7 @@ python3 scripts/predict_race.py races/kikka2026.csv --db data/keiba.sqlite --dat
 ```
 
 データが増えたら同じコマンドを再実行するだけです。`races/kikka2026.csv` は登録・枠順が出たら更新します
-（`number`、`weight_carried`、`odds` 列を足すとそれも使います）。
+（`number`、`weight_carried` 列を足すとそれも使い、全頭の `odds` を入れると市場補正後の勝率も出します）。
 
 ## 計画
 

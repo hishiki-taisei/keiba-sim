@@ -34,7 +34,7 @@ def load_runners(path=None) -> pd.DataFrame:
     df = pd.read_sql(
         """
         SELECT r.race_id, r.date, r.venue, r.name AS race_name, r.grade, r.surface,
-               r.distance, r.going, r.n_runners,
+               r.distance, r.going, r.n_runners, r.class_text,
                x.number, x.finish, x.finish_raw, x.frame, x.horse_id, x.horse_name,
                x.sex, x.age, x.weight_carried, x.jockey_id, x.jockey_name, x.time_sec,
                x.passing, x.last3f, x.odds, x.popularity, x.body_weight,

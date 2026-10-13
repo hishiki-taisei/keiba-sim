@@ -4,8 +4,9 @@
         --venue 京都 --surface 芝 --distance 3000 --out reports/kikka2026.md
 
 The entries CSV needs horse_name; jockey_name, number, weight_carried and odds
-are optional. Missing values come from each horse's latest race. The model is
+are optional. Missing values come from each horse's latest race. The models are
 refitted on every finished race in the database, so rerun it as data grows.
+With an odds column for every horse it also shows the market-corrected win rate.
 """
 import argparse
 import sys
@@ -18,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from predict import data, features  # noqa: E402
-from predict.model import ConditionalLogit  # noqa: E402
+from predict.evaluate import market_prob  # noqa: E402
+from predict.pipeline import Ensemble, scorable, training_rows  # noqa: E402
 
 UPCOMING = "UPCOMING"
 
@@ -43,7 +45,7 @@ def entry_rows(entries: pd.DataFrame, runners: pd.DataFrame, args) -> tuple[pd.D
         wc = getattr(e, "weight_carried", np.nan)
         rows.append({
             "race_id": UPCOMING, "date": pd.Timestamp(args.date), "venue": args.venue,
-            "race_name": args.name, "grade": None, "surface": args.surface, "distance": args.distance,
+            "race_name": args.name, "grade": args.grade, "class_text": "", "surface": args.surface, "distance": args.distance,
             "going": args.going, "n_runners": n, "field": n,
             "number": number if pd.notna(number) else (n + 1) / 2,
             "finish": np.nan, "finish_raw": None, "frame": np.nan,
@@ -68,7 +70,8 @@ def main():
     ap.add_argument("--distance", type=int, default=3000)
     ap.add_argument("--going", default="良")
     ap.add_argument("--name", default="")
-    ap.add_argument("--l2", type=float, default=1.0)
+    ap.add_argument("--grade", default="G1")
+    ap.add_argument("--trees", type=int, default=550, help="trees per model (backtest picks ~550)")
     ap.add_argument("--out")
     args = ap.parse_args()
 
@@ -78,23 +81,28 @@ def main():
     up, notes = entry_rows(entries, runners, args)
 
     df = features.build(pd.concat([runners, up], ignore_index=True), features.speed_standards(runners))
-    hist = df[df.race_id != UPCOMING]
-    hist = hist[(hist.date >= hist.date.min() + pd.DateOffset(months=6)) & hist.odds.notna()]
-    hist = hist[hist.groupby("race_id").finish.transform(lambda s: (s == 1).any())]
-    cols = features.FEATURES
-    model = ConditionalLogit(cols, l2=args.l2).fit(hist[cols].to_numpy(), hist.race_id.to_numpy(),
-                                                   (hist.finish == 1).to_numpy())
+    hist = training_rows(scorable(df[df.race_id != UPCOMING]))
+    model = Ensemble.fit(hist, n_trees=args.trees)
 
     race = df[df.race_id == UPCOMING].copy()
-    race["p_win"] = model.predict(race[cols].to_numpy(), race.race_id.to_numpy())
+    race["p_win"] = model.predict(race)
+    with_odds = race.odds.notna().all()
+    if with_odds:
+        # odds given: also correct the market with the model trained to do that
+        race["mkt"] = market_prob(race)
+        race["p_mkt"] = race.mkt
+        race["p_adj"] = Ensemble.fit(hist, n_trees=args.trees, resid=True).predict(race)
     race = race.sort_values("p_win", ascending=False)
 
     lines = [f"# {args.name or 'レース'} 予想（{args.date} {args.venue}{args.surface}{args.distance}m）", "",
              f"学習データ: {hist.date.min().date()}〜{hist.date.max().date()}の{hist.race_id.nunique()}レース。"
-             "オッズを使わない能力モデルの勝率です。", "",
-             "| 順位 | 馬 | 騎手 | 勝率 | 前走 | 過去走数 | 最高指数 |", "|---|---|---|---|---|---|---|"]
+             "勝率はオッズを使わない能力モデル（ブースティング木3本の平均）の値です。"
+             + ("市場はオッズから出した勝率、補正後は市場の勝率をモデルで直した値です。" if with_odds else ""), "",
+             "| 順位 | 馬 | 騎手 | 勝率 | " + ("市場 | 補正後 | " if with_odds else "") + "前走 | 過去走数 | 最高指数 |",
+             "|---|---|---|---|" + ("---|---|" if with_odds else "") + "---|---|---|"]
     for i, r in enumerate(race.itertuples(), 1):
-        lines.append(f"| {i} | {r.horse_name} | {r.jockey_name} | {r.p_win:.1%} | {r.last_race} | "
+        odds_cols = f"{r.p_mkt:.1%} | {r.p_adj:.1%} | " if with_odds else ""
+        lines.append(f"| {i} | {r.horse_name} | {r.jockey_name} | {r.p_win:.1%} | {odds_cols}{r.last_race} | "
                      f"{int(r.h_n)} | {r.h_fig_best:+.2f} |")
     if notes:
         lines += ["", "注記:", ""] + [f"- {s}" for s in notes]

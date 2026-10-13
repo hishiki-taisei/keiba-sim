@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from predict import features
+from predict.gbm import RaceGBM
 from predict.model import ConditionalLogit, race_softmax
 
 
@@ -26,13 +27,29 @@ class ConditionalLogitTest(unittest.TestCase):
         np.testing.assert_allclose(m.coef / m.scale, w_true, atol=0.1)
 
 
+class RaceGBMTest(unittest.TestCase):
+    def test_learns_threshold_signal(self):
+        rng = np.random.default_rng(1)
+        races, size = 1500, 8
+        X = rng.normal(size=(races * size, 3))
+        rid = np.repeat(np.arange(races), size)
+        p = race_softmax(2.0 * (X[:, 0] > 0.5), rid)
+        won = np.zeros(len(X))
+        for r in range(races):
+            won[r * size + rng.choice(size, p=p[r * size:(r + 1) * size])] = 1
+        m = RaceGBM(["a", "b", "c"], n_trees=60, learning_rate=0.2, max_depth=2).fit(X, rid, won)
+        q = m.predict(X, rid)
+        self.assertLess(-np.log(q[won == 1]).mean(), np.log(size) - 0.2)
+        self.assertEqual(next(iter(m.importance())), "a")
+
+
 class NoLeakTest(unittest.TestCase):
     def runners(self, last_winner):
         rows = []
         for k, date in enumerate(["2024-01-06", "2024-02-03", "2024-03-02"]):
             for n, horse in enumerate(["A", "B", "C"], 1):
                 finish = n if k < 2 else (1 if horse == last_winner else n + 1)
-                rows.append(dict(race_id=f"r{k}", date=pd.Timestamp(date), venue="京都", race_name="", grade=None,
+                rows.append(dict(race_id=f"r{k}", date=pd.Timestamp(date), venue="京都", race_name="", grade=None, class_text="",
                                  surface="芝", distance=2000, going="良", n_runners=3, field=3, number=n,
                                  finish=min(finish, 3), finish_raw=str(finish), frame=n, horse_id=horse,
                                  horse_name=horse, sex="牡", age=3, weight_carried=57.0, jockey_id=f"j{horse}",

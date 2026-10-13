@@ -3,9 +3,11 @@
     python3 scripts/backtest.py --db data/keiba.sqlite
 
 Split by date (no shuffling): train < --valid-start <= valid < --test-start <= test.
-1. Fundamentals model (no odds): conditional logit on FEATURES, L2 picked on valid.
-2. Blend with the market: a second conditional logit on [model score, log market
-   probability], fitted on valid (Benter's two-stage method).
+1. Linear baseline (no odds): conditional logit on FEATURES, L2 picked on valid.
+2. Fundamentals model (no odds): boosted trees with a per-race softmax loss,
+   averaged over seeds, number of trees picked on valid by early stopping.
+3. Market correction: boosted trees starting from the market's log-probability,
+   so they learn only where the odds are wrong.
 Both are scored on test with accuracy and win/place returns from the payouts
 table. Rerun as the database grows; the split dates are arguments.
 """
@@ -15,16 +17,17 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from predict import data, features  # noqa: E402
-from predict.evaluate import market_prob, metrics, payout_lookup  # noqa: E402
+from predict.pipeline import Ensemble, scorable, training_rows  # noqa: E402
+from predict.evaluate import metrics, payout_lookup  # noqa: E402
 from predict.model import ConditionalLogit  # noqa: E402
 
-L2_GRID = [0.1, 1, 10, 100, 1000]
+L2_GRID = [1, 10, 100]
+EDGES = [1.0, 1.1, 1.2, 1.5]
 
 
 def subsets(df):
@@ -57,43 +60,34 @@ def main():
     runners = data.load_runners(args.db)
     pay = payout_lookup(data.load_payouts(args.db))
     std = features.speed_standards(runners, before=args.valid_start)
-    df = features.build(runners, std)
-    # races need a winner and odds for every starter to be scored
-    ok = df.groupby("race_id").agg(w=("finish", lambda s: (s == 1).any()), o=("odds", lambda s: s.notna().all()))
-    df = df[df.race_id.isin(ok[ok.w & ok.o].index)].reset_index(drop=True)
-    df["mkt"] = market_prob(df)
+    df = scorable(features.build(runners, std))
 
-    tr = df[df.date < args.valid_start]
+    tr = training_rows(df[df.date < args.valid_start])
     va = df[(df.date >= args.valid_start) & (df.date < args.test_start)]
     te = df[df.date >= args.test_start]
-    # the first months have almost no history; skip them for training
-    tr = tr[tr.date >= tr.date.min() + pd.DateOffset(months=6)]
     print(f"train {tr.race_id.nunique()} races, valid {va.race_id.nunique()}, test {te.race_id.nunique()}")
-
-    def fit(d, l2, cols=features.FEATURES):
-        return ConditionalLogit(list(cols), l2=l2).fit(d[cols].to_numpy(), d.race_id.to_numpy(), (d.finish == 1).to_numpy())
+    cols = features.FEATURES
 
     best = None
     for l2 in L2_GRID:
-        m = fit(tr, l2)
-        ll = metrics(va, m.predict(va[features.FEATURES].to_numpy(), va.race_id.to_numpy()), pay)["logloss"]
-        print(f"l2={l2}: valid logloss {ll:.4f}")
+        m = ConditionalLogit(list(cols), l2=l2).fit(tr[cols].to_numpy(), tr.race_id.to_numpy(), (tr.finish == 1).to_numpy())
+        ll = metrics(va, m.predict(va[cols].to_numpy(), va.race_id.to_numpy()), pay)["logloss"]
+        print(f"linear l2={l2}: valid logloss {ll:.4f}")
         if best is None or ll < best[0]:
             best = (ll, l2, m)
-    _, l2, model = best
-
-    def stage2_inputs(d):
-        return np.c_[model.score(d[features.FEATURES].to_numpy()), np.log(d.mkt.to_numpy())]
-
-    stage2 = ConditionalLogit(["model_score", "log_market"], l2=0.01).fit(
-        stage2_inputs(va), va.race_id.to_numpy(), (va.finish == 1).to_numpy())
+    _, l2, linear = best
+    print("training boosted trees ...")
+    gbm = Ensemble.fit(tr, va)
+    resid = Ensemble.fit(tr, va, resid=True)
+    print(f"trees: fundamentals {gbm.n_trees}, market correction {resid.n_trees}")
 
     preds = {
         "市場オッズ": lambda d: d.mkt.to_numpy(),
-        "能力モデル": lambda d: model.predict(d[features.FEATURES].to_numpy(), d.race_id.to_numpy()),
-        "能力+市場": lambda d: stage2.predict(stage2_inputs(d), d.race_id.to_numpy()),
+        "線形(旧)": lambda d: linear.predict(d[cols].to_numpy(), d.race_id.to_numpy()),
+        "能力モデル": gbm.predict,
+        "市場補正": resid.predict,
     }
-    rows = []
+    rows, value_rows = [], []
     for split_name, d in [("valid", va), ("test", te)]:
         for name, f in preds.items():
             p = f(d)
@@ -102,31 +96,39 @@ def main():
                     continue
                 r = metrics(d[mask], p[mask], pay)
                 rows.append({"split": split_name, "model": name, "subset": sub, **r})
+            if name == "市場補正":
+                for e in EDGES:
+                    r = metrics(d, p, pay, value_edge=e)
+                    value_rows.append((split_name, e, r["value_bets"], r["roi_win_value"]))
 
     # past Kikka-sho: how would the fundamentals model have ranked the field?
     kikka = []
     for rid, g in df[df.race_name.str.contains("菊花賞", na=False)].groupby("race_id"):
-        g = g.assign(p=model.predict(g[features.FEATURES].to_numpy(), g.race_id.to_numpy())).sort_values("p", ascending=False)
+        g = g.assign(p=gbm.predict(g)).sort_values("p", ascending=False)
         kikka.append((g.date.iloc[0].date(), g.head(5)[["horse_name", "p", "popularity", "finish"]],
-                      g[g.finish == 1].horse_name.iloc[0], int(g[g.finish == 1].p.rank().iloc[0]),
+                      g[g.finish == 1].horse_name.iloc[0],
                       int((g.p.rank(ascending=False)[g.finish == 1]).iloc[0])))
 
     lines = [
         "# バックテスト結果", "",
         f"- 学習: {tr.date.min().date()} 〜 {tr.date.max().date()}（{tr.race_id.nunique()}レース）",
-        f"- 検証: {va.date.min().date()} 〜 {va.date.max().date()}（{va.race_id.nunique()}レース）, L2={l2}",
+        f"- 検証: {va.date.min().date()} 〜 {va.date.max().date()}（{va.race_id.nunique()}レース）。"
+        f"線形のL2={l2}、木の本数（能力{gbm.n_trees}本・市場補正{resid.n_trees}本）はここで決めた",
         f"- テスト: {te.date.min().date()} 〜 {te.date.max().date()}（{te.race_id.nunique()}レース）",
         "- logloss は勝ち馬に付けた確率の負の対数の平均（小さいほど良い）。回収率は100円ずつ買ったときの払戻/購入額。",
-        "- 「能力+市場」と value 買いは確定オッズを使うので、実際に買える前日オッズより少し有利な見積もりです。",
+        "- 能力モデルはオッズを使わない。市場補正は確定オッズを出発点にするので、実際に買える締切前オッズより少し有利な見積もり。",
         "",
     ]
     for split_name in ["test", "valid"]:
         lines += [f"## {split_name}", "", fmt_table([r for r in rows if r["split"] == split_name]), ""]
-    lines += ["## 能力モデルの係数（標準化後）", "", "| 特徴量 | 係数 |", "|---|---|"]
-    lines += [f"| {k} | {v:+.3f} |" for k, v in sorted(model.coefficients().items(), key=lambda kv: -abs(kv[1]))]
-    lines += ["", f"市場ブレンド: {stage2.coefficients()}", "", "## 過去の菊花賞（能力モデルの上位5頭）", "",
+    lines += ["## 市場補正モデルで「勝率×オッズ ≥ しきい値」の単勝を全部買った場合", "",
+              "| 期間 | しきい値 | 点数 | 回収率 |", "|---|---|---|---|"]
+    lines += [f"| {s} | {e} | {n} | {r:.3f} |" for s, e, n, r in value_rows]
+    lines += ["", "## 能力モデルでよく使われた特徴量（分岐回数）", "", "| 特徴量 | 回数 |", "|---|---|"]
+    lines += [f"| {k} | {v} |" for k, v in list(gbm.importance().items())[:20]]
+    lines += ["", "## 過去の菊花賞（能力モデルの上位5頭）", "",
               f"{va.date.min().year}年より前の菊花賞は学習期間に入っているので参考値です。", ""]
-    for date, top5, winner, _, wrank in kikka:
+    for date, top5, winner, wrank in kikka:
         lines.append(f"**{date}** 勝ち馬 {winner}（モデル{wrank}位）")
         lines.append("")
         lines.append("| 馬 | 予想勝率 | 人気 | 着順 |\n|---|---|---|---|")
@@ -135,7 +137,6 @@ def main():
 
     (out / "backtest.md").write_text("\n".join(lines), encoding="utf-8")
     (out / "backtest.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
-    (out / "model.json").write_text(model.to_json(), encoding="utf-8")
     print("\n".join(lines[:8]))
     print(fmt_table([r for r in rows if r["split"] == "test"]))
 
