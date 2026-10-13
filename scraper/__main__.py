@@ -85,7 +85,11 @@ def cmd_peds(args, con, f: Fetcher):
            ORDER BY ra.date DESC"""
     todo = [r[0] for r in con.execute(q)][: args.limit or None]
     for i, hid in enumerate(todo):
-        html = f.get(f"https://db.netkeiba.com/horse/ped/{hid}/", f"ped/{hid[:4]}/{hid}")
+        try:
+            html = f.get(f"https://db.netkeiba.com/horse/ped/{hid}/", f"ped/{hid[:4]}/{hid}")
+        except RuntimeError as e:
+            print(e, flush=True)  # not stored, so the next run tries it again
+            continue
         p = parse.pedigree(html, hid) if html else None
         db.upsert(con, "horses", [p or {"horse_id": hid}])
         con.commit()
