@@ -40,7 +40,8 @@ class RaceGBMTest(unittest.TestCase):
         m = RaceGBM(["a", "b", "c"], n_trees=60, learning_rate=0.2, max_depth=2).fit(X, rid, won)
         q = m.predict(X, rid)
         self.assertLess(-np.log(q[won == 1]).mean(), np.log(size) - 0.2)
-        self.assertEqual(next(iter(m.importance())), "a")
+        hi = X[:, 0] > 0.5
+        self.assertGreater(q[hi].mean(), 3 * q[~hi].mean())
 
 
 class NoLeakTest(unittest.TestCase):
