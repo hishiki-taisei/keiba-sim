@@ -15,6 +15,9 @@ while [ "$(python3 -m scraper status 2>/dev/null | grep -c "'todo'")" -gt 0 ]; d
   python3 -m scraper races --limit "$CHUNK"
   snap
 done
+# Retry pages that failed during the run once more.
+python3 -m scraper retry
+python3 -m scraper races
 python3 -m scraper peds
 snap
 python3 -m scraper status

@@ -48,8 +48,8 @@ class Fetcher:
             self.hits += 1
             if r.status_code == 404:
                 return None
-            if r.status_code in (403, 429) or r.status_code >= 500:
-                # Back off hard: the site is asking us to slow down.
+            if r.status_code in (400, 403, 429) or r.status_code >= 500:
+                # Back off hard: the site is asking us to slow down (it also answers 400 at times).
                 time.sleep(60 * (attempt + 1))
                 continue
             r.raise_for_status()

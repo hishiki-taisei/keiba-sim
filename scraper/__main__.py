@@ -57,7 +57,14 @@ def cmd_races(args, con, f: Fetcher):
     q = "SELECT race_id FROM race_queue WHERE status='todo' ORDER BY date DESC, race_id"
     todo = [r[0] for r in con.execute(q)][: args.limit or None]
     for i, rid in enumerate(todo):
-        html = f.get(f"https://db.netkeiba.com/race/{rid}/", f"race/{rid[:4]}/{rid}")
+        try:
+            html = f.get(f"https://db.netkeiba.com/race/{rid}/", f"race/{rid[:4]}/{rid}")
+        except RuntimeError as e:
+            # Leave it for a later run instead of stopping the whole collection.
+            print(e, flush=True)
+            con.execute("UPDATE race_queue SET status='error' WHERE race_id=?", (rid,))
+            con.commit()
+            continue
         d = parse.race(html, rid) if html else None
         if d is None:
             con.execute("UPDATE race_queue SET status='missing' WHERE race_id=?", (rid,))
@@ -99,6 +106,12 @@ def cmd_reparse(args, con, f: Fetcher):
     con.commit()
 
 
+def cmd_retry(args, con, f):
+    n = con.execute("UPDATE race_queue SET status='todo' WHERE status='error'").rowcount
+    con.commit()
+    print(f"{n} failed races queued again")
+
+
 def cmd_snapshot(args, con, f):
     """Copy the database to --out with SQLite's online backup (safe while a collector runs)."""
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -128,13 +141,14 @@ def main(argv=None):
     for name in ("races", "peds"):
         sub.add_parser(name).add_argument("--limit", type=int, default=0)
     sub.add_parser("reparse")
+    sub.add_parser("retry")
     sub.add_parser("status")
     sub.add_parser("snapshot").add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
     con = db.connect(args.db)
     f = Fetcher(RAW, interval=args.interval)
     {"days": cmd_days, "races": cmd_races, "peds": cmd_peds,
-     "reparse": cmd_reparse, "status": cmd_status, "snapshot": cmd_snapshot}[args.cmd](args, con, f)
+     "reparse": cmd_reparse, "status": cmd_status, "retry": cmd_retry, "snapshot": cmd_snapshot}[args.cmd](args, con, f)
     print(f"requests made: {f.hits}", file=sys.stderr)
 
 
