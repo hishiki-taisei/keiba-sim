@@ -17,6 +17,7 @@ from . import evaluate
 
 ROOT = Path(__file__).resolve().parent.parent
 LOG = ROOT / "experiments" / "log.csv"
+SIM_LOG = ROOT / "experiments" / "sim_log.csv"
 README = ROOT / "experiments" / "README.md"
 
 
@@ -40,21 +41,36 @@ def score(predict, valid: pd.DataFrame, test: pd.DataFrame) -> dict:
     return row
 
 
-def record(name: str, description: str, predict, valid, test) -> dict:
+def record(name: str, description: str, predict, valid, test, surface: str = "芝") -> dict:
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                                 capture_output=True, text=True).stdout.strip()
     except OSError:
         commit = ""
-    row = {"date": dt.date.today().isoformat(), "name": name, "description": description, "commit": commit,
+    row = {"date": dt.date.today().isoformat(), "surface": surface, "name": name, "description": description,
+           "commit": commit,
            **score(predict, valid, test)}
     LOG.parent.mkdir(exist_ok=True)
     log = pd.read_csv(LOG) if LOG.exists() else pd.DataFrame()
-    log = log[log["name"] != name] if "name" in log else log  # re-running replaces the row
+    if "surface" in log:
+        log["surface"] = log["surface"].fillna("芝")
+        log = log[~((log["name"] == name) & (log["surface"] == surface))]  # re-running replaces the row
     log = pd.concat([log, pd.DataFrame([row])], ignore_index=True)
     log.to_csv(LOG, index=False)
     write_readme(log)
     return row
+
+
+def record_sim(name: str, description: str, sim: dict, base: dict):
+    """One row for a simulator test on turf 2400m+ (2024-)."""
+    row = {"date": dt.date.today().isoformat(), "name": name, "description": description,
+           "races": sim["races"], "logloss": round(sim["logloss"], 4), "win": round(sim["win_hit"], 4),
+           "top3": round(sim["top_pick_in3"], 4), "strength_logloss": round(base["logloss"], 4),
+           "strength_win": round(base["win_hit"], 4)}
+    log = pd.read_csv(SIM_LOG) if SIM_LOG.exists() else pd.DataFrame()
+    log = log[log["name"] != name] if "name" in log else log
+    pd.concat([log, pd.DataFrame([row])], ignore_index=True).to_csv(SIM_LOG, index=False)
+    write_readme(pd.read_csv(LOG))
 
 
 def write_readme(log: pd.DataFrame):
@@ -67,17 +83,31 @@ def write_readme(log: pd.DataFrame):
         "「本命」はモデルがいちばん勝率が高いと出した馬です。菊花賞型は「3歳・芝2400m以上・9〜11月」。",
         "勾配ブースティング（gbdt）は調整期間で学習の止めどころを決めているので、比べるときはテストの列を見てください。",
         "",
-        "| 日付 | モデル | 内容 | 調整 対数損失 | テスト 対数損失 | テスト 本命勝率 | テスト 本命3着内 "
-        "| 長距離 対数損失 | 長距離 本命勝率 | 菊花賞型 本命勝率 | 菊花賞型 本命3着内 |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
-    for _, r in log.iterrows():
-        lines.append(
-            f"| {r['date']} | {r['name']} | {r['description']} | {r['valid_all_logloss']:.4f} "
-            f"| {r['test_all_logloss']:.4f} | {pct(r['test_all_win'])} | {pct(r['test_all_top3'])} "
-            f"| {r['test_long_logloss']:.4f} | {pct(r['test_long_win'])} "
-            f"| {pct(r.get('test_kikka_like_win'))} | {pct(r.get('test_kikka_like_top3'))} |")
-    n = log.iloc[-1]
-    lines += ["", f"テストのレース数：全体 {int(n['test_all_races'])}、長距離（芝2200m以上） {int(n['test_long_races'])}、"
-              f"菊花賞型 {int(n['test_kikka_like_races'])}。"]
+    log = log.assign(surface=log["surface"].fillna("芝") if "surface" in log else "芝")
+    for surface, part in log.groupby("surface", sort=False):
+        lines += ["", f"## {surface}", "",
+                  "| 日付 | モデル | 内容 | 調整 対数損失 | テスト 対数損失 | テスト 本命勝率 | テスト 本命3着内 "
+                  "| 長距離 対数損失 | 長距離 本命勝率 | 菊花賞型 本命勝率 | 菊花賞型 本命3着内 |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for _, r in part.iterrows():
+            lines.append(
+                f"| {r['date']} | {r['name']} | {r['description']} | {r['valid_all_logloss']:.4f} "
+                f"| {r['test_all_logloss']:.4f} | {pct(r['test_all_win'])} | {pct(r['test_all_top3'])} "
+                f"| {r['test_long_logloss']:.4f} | {pct(r['test_long_win'])} "
+                f"| {pct(r.get('test_kikka_like_win'))} | {pct(r.get('test_kikka_like_top3'))} |")
+        n = part.iloc[-1]
+        kl = n.get("test_kikka_like_races")
+        lines += ["", f"テストのレース数：全体 {int(n['test_all_races'])}、長距離（2200m以上） {int(n['test_long_races'])}"
+                  + (f"、菊花賞型 {int(kl)}" if pd.notna(kl) else "") + "。"]
+    if SIM_LOG.exists():
+        sim = pd.read_csv(SIM_LOG)
+        lines += ["", "## シミュレーター", "",
+                  "芝2400m以上のテスト期間（2024年〜）のレースを実際に走らせた成績です。"
+                  "「元のモデル」はシミュレーターの最高速度の元になっている勝率モデル単体の成績です。", "",
+                  "| 日付 | 版 | 内容 | レース数 | 対数損失 | 本命勝率 | 本命3着内 | 元のモデル 対数損失 | 元のモデル 本命勝率 |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for _, r in sim.iterrows():
+            lines.append(f"| {r['date']} | {r['name']} | {r['description']} | {r['races']} | {r['logloss']:.4f} "
+                         f"| {pct(r['win'])} | {pct(r['top3'])} | {r['strength_logloss']:.4f} | {pct(r['strength_win'])} |")
     README.write_text("\n".join(lines) + "\n", encoding="utf-8")

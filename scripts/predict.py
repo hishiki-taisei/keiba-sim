@@ -20,14 +20,16 @@ sys.path.insert(0, str(ROOT))
 
 from model import features  # noqa: E402
 from model.data import load_runs  # noqa: E402
-from model.logit import Logit  # noqa: E402
+from model.gbdt import GBDT  # noqa: E402
 from model.to_sim import SimParams, course_for, horses  # noqa: E402
 from scraper import parse  # noqa: E402
 from scraper.fetch import Fetcher  # noqa: E402
 from sim.export import build, write  # noqa: E402
 from sim.race import probabilities, simulate  # noqa: E402
 
-SIMULATED = ["early_pos5", "gate_rel", "kick5"]
+SIMULATED = ["early_pos5", "gate_rel", "kick5", "early_pos5_rel"]
+WIN_FEATURES = features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES
+SIM_FEATURES = [f for f in WIN_FEATURES if f not in SIMULATED]
 N_SIM = 4000
 
 
@@ -42,12 +44,15 @@ def main(race_id: str, name: str):
     df = load_runs()
     F = pd.read_pickle(ROOT / "data" / "features_turf.pkl")
     F = F[F["odds"].notna() & (F["field"] >= 5) & (F["date"] < pd.Timestamp(race["date"]))]
-    model = Logit(features.FEATURES).fit(F)
+    # Gradient boosting, stopped on the most recent year of races.
+    last = F["date"] >= pd.Timestamp(race["date"]) - pd.Timedelta(days=365)
+    model = GBDT(WIN_FEATURES, rounds=800).fit(F[~last], F[last])
+    strength = GBDT(SIM_FEATURES, rounds=800).fit(F[~last], F[last])
     prm = SimParams(**json.loads((ROOT / "data" / "sim_backtest.json").read_text())["params"])
 
     rows = features.for_entries(df, race).reset_index(drop=True)
     p_model = model.predict(rows)
-    score = model.score_without(rows, SIMULATED)
+    score = strength.score(rows)
     hs = horses(rows, score, prm)
     course = course_for(race["distance"])
 

@@ -2,6 +2,7 @@
 
     python3 scripts/experiment.py market linear_v1 linear_going gbdt gbdt_going
     python3 scripts/experiment.py --rebuild ...   # rebuild the feature table first
+    python3 scripts/experiment.py --surface ダ ... # dirt races (features_dirt.pkl)
 """
 import sys
 from pathlib import Path
@@ -17,7 +18,8 @@ from model.data import load_runs  # noqa: E402
 from model.gbdt import GBDT  # noqa: E402
 from model.logit import Logit  # noqa: E402
 
-CACHE = ROOT / "data" / "features_turf.pkl"
+SURFACE = sys.argv[sys.argv.index("--surface") + 1] if "--surface" in sys.argv else "芝"
+CACHE = ROOT / "data" / ("features_turf.pkl" if SURFACE == "芝" else "features_dirt.pkl")
 BASE = [f for f in features.FEATURES if f != "ped_long"]
 
 EXPERIMENTS = {
@@ -37,7 +39,7 @@ def main(names):
     if CACHE.exists() and "--rebuild" not in sys.argv:
         F = pd.read_pickle(CACHE)
     else:
-        F = features.build(load_runs(), "2018-01")
+        F = features.build(load_runs(surface=SURFACE), "2018-01")
         F.to_pickle(CACHE)
     F = F[F["odds"].notna() & (F["field"] >= 5)]
     year = F["date"].dt.year
@@ -52,9 +54,13 @@ def main(names):
             m = GBDT(spec[1], rounds=800, lr=0.05, depth=4).fit(train, valid)
             print(name, "trees", len(m.trees), "importance", m.importance())
             predict = m.predict
-        row = experiment.record(name, desc, predict, valid, test)
+        row = experiment.record(name, desc, predict, valid, test, surface=SURFACE)
         print(name, {k: v for k, v in row.items() if k.endswith(("logloss", "_win"))}, flush=True)
 
 
 if __name__ == "__main__":
-    main([a for a in sys.argv[1:] if not a.startswith("--")])
+    args = sys.argv[1:]
+    if "--surface" in args:
+        i = args.index("--surface")
+        args = args[:i] + args[i + 2:]
+    main([a for a in args if not a.startswith("--")])

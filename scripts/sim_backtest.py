@@ -1,10 +1,10 @@
 """Calibrate and test the race simulator on long turf races (>= 2400m).
 
-The win model's score drives top speed; the simulator adds pace, position and
+The strength model's score drives top speed; the simulator adds pace, position and
 stamina. k_speed / k_stamina are picked on 2023 races and then scored on
-2024- races against the win model alone and the betting market.
+2024- races against the strength model alone and the betting market.
 
-    python3 scripts/sim_backtest.py [--n 300]
+    python3 scripts/sim_backtest.py [--n 300] [--record NAME "description"]
 """
 import json
 import sys
@@ -17,17 +17,18 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from model import evaluate, features  # noqa: E402
-from model.logit import Logit  # noqa: E402
+from model import evaluate, experiment, features  # noqa: E402
+from model.gbdt import GBDT  # noqa: E402
 from model.to_sim import SimParams, race_probs  # noqa: E402
 
 GRID = [(ks, 0.0, ke) for ks in (0.05, 0.1, 0.2) for ke in (0.0, 0.005, 0.01)] + \
        [(0.1, kst, 0.005) for kst in (0.005, 0.01)]
-SIMULATED = ["early_pos5", "gate_rel", "kick5"]  # the simulator plays these out itself
+SIMULATED = ["early_pos5", "gate_rel", "kick5", "early_pos5_rel"]  # the simulator plays these out itself
+SIM_FEATURES = [f for f in features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES if f not in SIMULATED]
 
 
 def sim_score(model, d):
-    return model.score_without(d, SIMULATED)
+    return model.score(d)
 
 
 N = int(sys.argv[sys.argv.index("--n") + 1]) if "--n" in sys.argv else 300
@@ -52,7 +53,8 @@ def main():
     F = pd.read_pickle(ROOT / "data" / "features_turf.pkl")
     F = F[F["odds"].notna() & (F["field"] >= 5)]
     year = F["date"].dt.year
-    model = Logit(features.FEATURES).fit(F[year <= 2022])
+    # Strength model for top speed: gradient boosting without the features the simulator plays out.
+    model = GBDT(SIM_FEATURES, rounds=800).fit(F[year <= 2022], F[year == 2023])
     long_ = F["distance"] >= 2400
     valid, test = F[(year == 2023) & long_], F[(year >= 2024) & long_]
 
@@ -72,13 +74,16 @@ def main():
 
     out = {"params": prm.__dict__, "grid": grid, "test": {
         "simulator": evaluate.metrics(test, p_sim),
-        "win model": evaluate.metrics(test, model.predict(test)),
+        "strength model": evaluate.metrics(test, model.predict(test)),
         "market": evaluate.metrics(test, evaluate.market_probs(test)),
         "simulator roi": evaluate.roi_top_pick(test, p_sim, 1.0),
     }}
     for k, v in out["test"].items():
         print(f"test 2024- {k:12s} {v}")
     (ROOT / "data" / "sim_backtest.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
+    if "--record" in sys.argv:
+        name, desc = sys.argv[sys.argv.index("--record") + 1:sys.argv.index("--record") + 3]
+        experiment.record_sim(name, desc, out["test"]["simulator"], out["test"]["strength model"])
 
 
 if __name__ == "__main__":
