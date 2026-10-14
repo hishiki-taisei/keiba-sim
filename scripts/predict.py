@@ -53,10 +53,10 @@ def main(race_id: str, name: str):
 
     if drawn:
         p = probabilities(simulate(course, hs, n=N_SIM, seed=0))
-        win, place = p["win"], p["place"]
+        win, place, mrank = p["win"], p["place"], p["mean_rank"]
     else:
         rng = np.random.default_rng(0)
-        win, place = np.zeros(len(hs)), np.zeros(len(hs))
+        win, place, mrank = np.zeros(len(hs)), np.zeros(len(hs)), np.zeros(len(hs))
         draws = 10
         for k in range(draws):
             gates = rng.permutation(len(hs)) + 1
@@ -65,6 +65,7 @@ def main(race_id: str, name: str):
             p = probabilities(simulate(course, hs, n=N_SIM // draws, seed=k))
             win += p["win"] / draws
             place += p["place"] / draws
+            mrank += p["mean_rank"] / draws
         for i, h in enumerate(hs):
             h.gate = i + 1
 
@@ -78,8 +79,9 @@ def main(race_id: str, name: str):
     note = ("過去の全レースから推定した能力値で走らせた予想です。"
             + ("" if drawn else "枠順が未確定のため、枠をランダムに10通り変えて平均しています。リプレイの枠は仮です。"))
     data = build(course, hs, n=N_SIM, seed=1, title=race["title"].replace(" 出馬表", ""), note=note)
-    for h, w, pl, pm in zip(data["horses"], win, place, p_model):
-        h["win"], h["place"], h["model_win"] = round(float(w), 4), round(float(pl), 4), round(float(pm), 4)
+    for h, w, pl, mr, pm in zip(data["horses"], win, place, mrank, p_model):
+        h.update(win=round(float(w), 4), place=round(float(pl), 4), mean_rank=round(float(mr), 2),
+                 model_win=round(float(pm), 4))
     write(data, ROOT / "web" / "data" / f"{name}.json")
     table.to_csv(ROOT / "data" / f"{name}.csv", index=False)
     print(f"wrote web/data/{name}.json")
