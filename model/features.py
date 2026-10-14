@@ -56,8 +56,13 @@ def jockey_strength(df: pd.DataFrame) -> pd.Series:
     return df[["jockey_id", "date"]].merge(m, on=["jockey_id", "date"], how="left")["jk"].fillna(0.25).values
 
 
-def build(df: pd.DataFrame, start: str = "2018-01", **rating_kw) -> pd.DataFrame:
-    """Feature table for every run from ``start`` on."""
+def build(df: pd.DataFrame, start: str = "2018-01", asof: pd.Timestamp | None = None,
+          **rating_kw) -> pd.DataFrame:
+    """Feature table for every run from ``start`` on.
+
+    Ratings are fit at the start of each month, or at ``asof`` when given (used for
+    a single upcoming race, so runs earlier in the same month count).
+    """
     f = form(df)
     df = df.join(f)
     df["jockey"] = jockey_strength(df)
@@ -67,7 +72,7 @@ def build(df: pd.DataFrame, start: str = "2018-01", **rating_kw) -> pd.DataFrame
         sel = df[(df["date"] >= m0) & (df["date"] < m1)].copy()
         if sel.empty:
             continue
-        R = rating_mod.fit(df, m0, **rating_kw)
+        R = rating_mod.fit(df, asof if asof is not None and m0 <= asof < m1 else m0, **rating_kw)
         val = np.zeros(len(sel))
         slope = np.zeros(len(sel))
         n = np.zeros(len(sel))
@@ -99,3 +104,21 @@ def build(df: pd.DataFrame, start: str = "2018-01", **rating_kw) -> pd.DataFrame
     # Ratings are relative to the field.
     out["rating"] = out["rating"] - out.groupby("race_id")["rating"].transform("mean")
     return out
+
+
+def for_entries(df: pd.DataFrame, race: dict) -> pd.DataFrame:
+    """Features for an upcoming race. ``race`` is scraper.parse.entries() output."""
+    date = pd.Timestamp(race["date"])
+    rows = pd.DataFrame(race["horses"])
+    n = len(rows)
+    if rows["number"].isna().any():  # before the draw: spread them evenly
+        rows["number"] = np.arange(1, n + 1)
+    rows = rows.assign(race_id=race["race_id"], date=date, surface=race["surface"],
+                       distance=race["distance"], field=n, finish=np.nan, time_sec=np.nan,
+                       odds=np.nan, prize=np.nan, speed=np.nan, early_pos=np.nan, kick_rel=np.nan,
+                       last3f=np.nan, passing=None, race_name=race["title"])
+    rows["number"] = rows["number"].astype(int)
+    hist = df[df["date"] < date]
+    all_ = pd.concat([hist, rows], ignore_index=True)
+    out = build(all_, start=date.strftime("%Y-%m"), asof=date)
+    return out[out["race_id"] == race["race_id"]]

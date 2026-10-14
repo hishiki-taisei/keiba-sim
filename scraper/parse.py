@@ -206,3 +206,47 @@ def pedigree(html: str, horse_id: str) -> dict | None:
             "sire": sire, "sire_id": sire_id, "dam": dam, "dam_id": dam_id,
             "damsire": damsire, "damsire_id": damsire_id,
             "sire_sire": siresire, "sire_sire_id": siresire_id}
+
+
+def entries(html: str, race_id: str) -> dict | None:
+    """race.netkeiba.com/race/shutuba.html -> race conditions and the entered horses.
+
+    Before the draw, gate and number are None; before betting opens, odds are None.
+    """
+    b = soup(html)
+    rows = b.select("tr.HorseList")
+    if not rows:
+        return None
+    data01 = b.select_one(".RaceData01")
+    cond = data01.get_text(" ", strip=True) if data01 else ""
+    dist = re.search(r"(\d+)m", cond)
+    title = b.title.get_text() if b.title else ""
+    date = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title)
+    out = []
+    for r in rows:
+        horse_a = r.find("a", href=re.compile(r"/horse/\d+"))
+        if horse_a is None:
+            continue
+        cells = r.find_all("td")
+        txt = [c.get_text(" ", strip=True) for c in cells]
+        sexage = next((t for t in txt if re.fullmatch(r"[牡牝セ]\d+", t)), "")
+        weight = next((t for t in txt if re.fullmatch(r"\d{2}(\.\d)?", t)), None)
+        frame = r.select_one("td[class^=Waku]")
+        num = r.select_one("td[class^=Umaban]")
+        odds = r.select_one("td.Popular span, span[id^=odds-]")
+        jockey_a = r.find("a", href=re.compile(r"/jockey/"))
+        out.append({
+            "horse_id": re.search(r"/horse/(\d+)", horse_a["href"]).group(1),
+            "horse_name": horse_a.get_text(strip=True),
+            "sex": sexage[:1] or None, "age": _num(sexage[1:], int),
+            "weight_carried": _num(weight),
+            "frame": _num(frame.get_text(strip=True), int) if frame else None,
+            "number": _num(num.get_text(strip=True), int) if num else None,
+            "jockey_id": _id(jockey_a, "jockey"),
+            "jockey_name": jockey_a.get_text(strip=True) if jockey_a else None,
+            "odds": _num(odds.get_text(strip=True)) if odds else None,
+        })
+    return {"race_id": race_id, "title": title.split("|")[0].strip(),
+            "date": f"{date.group(1)}-{int(date.group(2)):02d}-{int(date.group(3)):02d}" if date else None,
+            "surface": "芝" if cond.startswith("芝") else "ダ", "distance": int(dist.group(1)) if dist else None,
+            "horses": out}
