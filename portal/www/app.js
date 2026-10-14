@@ -77,6 +77,7 @@ async function route() {
       if (!["card", "look", "pp", "ai", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "result" && !done(state.race))) state.tab = "card";
     }
   } else state.race = null;
+  if (h === "strategy" && !state.strat) state.strat = await getJSON("data/strategy.json");
   render();
   window.scrollTo(0, 0);
 }
@@ -87,6 +88,7 @@ function render() {
   if (state.race) html = raceView(state.race);
   else if (h === "glossary") html = glossaryView();
   else if (h === "about") html = aboutView();
+  else if (h === "strategy") html = strategyView();
   else html = homeView();
   $("#view").innerHTML = html;
   document.title = state.race ? `${state.race.name.replace(/\(G[IⅠ]+\)/, "")} | うまミル` : "うまミル";
@@ -215,87 +217,31 @@ function cardView(r) {
 }
 
 // --- the checks a handicapper runs through, per horse
-const sameJockey = (a, b) => !!a && !!b && (a.includes(b) || b.includes(a) || a.replace(/^[A-Z]\./, "").slice(0, 2) === b.replace(/^[A-Z]\./, "").slice(0, 2));
-const top3 = (a) => a[0] + a[1] + a[2];
-const runs = (a) => a[0] + a[1] + a[2] + a[3];
-
-function paceOf(r) {
-  const n = r.horses.length;
-  const c = { 逃げ: 0, 先行: 0, 差し: 0, 追込: 0 };
-  for (const h of r.horses) if (h.style) c[h.style]++;
-  const front = c.逃げ + c.先行;
-  if (c.逃げ >= 3 || front / n >= 0.5) return { key: "high", label: "速くなりそう", why: `逃げ・先行タイプが${front}頭（うち逃げ${c.逃げ}頭）と多く、前の争いが激しくなりやすい。前に行く馬には厳しく、後ろで脚をためる馬に向く。`, c };
-  if (c.逃げ <= 1 && front / n <= 0.3) return { key: "slow", label: "落ち着きそう", why: `逃げタイプが${c.逃げ}頭、先行タイプも${c.先行}頭と少なく、ゆったり流れやすい。前にいる馬が止まりにくく、後ろの馬は届きにくい。`, c };
-  return { key: "mid", label: "平均的", why: `逃げ${c.逃げ}頭・先行${c.先行}頭で、極端な流れにはなりにくい。`, c };
-}
-
-function checks(h, r, pace) {
-  const out = [];
-  const add = (k, v, s = "") => out.push({ k, v, s });
-  const last = h.past[0];
-  if (!last) { add("経験", "初出走。比べる材料がない", ""); return out; }
-  // 1. form
-  const lv = `${short(last.name)} ${last.finish ?? last.finish_raw}着（${last.field}頭・${last.pop ?? "-"}番人気）${last.behind > 0 ? `、勝ち馬と${last.behind}秒差` : ""}`;
-  add("前走の内容", lv, last.finish === 1 || (last.grade && last.finish <= 3) || (last.behind != null && last.behind <= 0.2) ? "+" : last.behind >= 1.0 ? "-" : "");
-  // 2. distance
-  const longest = Math.max(...h.past.map((x) => x.distance));
-  const b = h.records.band;
-  const firstLong = r.distance - longest >= 400;
-  add("距離", `${dist_label(r.distance)}で${rec(b)}、これまでの最長は${longest}m${firstLong ? "（今回が初めての距離）" : ""}`, top3(b) > 0 ? "+" : firstLong ? "-" : "");
-  // 3. course
-  const c = h.records.course;
-  add("コース", runs(c) ? `${r.venue}${r.surface}で${rec(c)}` : `${r.venue}${r.surface}は初めて`, top3(c) > 0 ? "+" : "");
-  // 4. pace vs style
-  if (h.style) {
-    const back = h.style === "差し" || h.style === "追込";
-    const s = pace.key === "high" ? (back ? "+" : h.style === "逃げ" ? "-" : "") : pace.key === "slow" ? (!back ? "+" : h.style === "追込" ? "-" : "") : "";
-    add("展開", `${h.style}タイプ。流れは${pace.label}見立て`, s);
-  }
-  // 5. finishing speed
-  const l3 = h.past.slice(0, 3).map((x) => x.l3rank).filter(Boolean);
-  if (l3.length) {
-    const avg = l3.reduce((a, x) => a + x, 0) / l3.length;
-    add("末脚", `近${l3.length}走の上がり順位は ${l3.join("・")} 位`, l3.includes(1) || avg <= 3 ? "+" : avg >= 8 ? "-" : "");
-  }
-  // 6. spacing
-  const gap = Math.round((new Date(r.date) - new Date(last.date)) / 86400000);
-  add("間隔", `前走から${Math.round(gap / 7)}週${gap >= 90 ? "（休み明け）" : gap <= 13 ? "（詰めて使う）" : ""}`, gap >= 90 ? "-" : "");
-  // 7. jockey
-  const j = h.jockey_rec;
-  const keep = sameJockey(h.jockey, last.jockey);
-  add("騎手", `${keep ? "前走と同じ" : `乗り替わり（前走は${last.jockey}）`}${j ? `。直近1年の3着内率${pct(j.top3, 0)}` : ""}`, j && j.n >= 50 && j.top3 >= 0.35 ? "+" : "");
-  // 8. weight carried
-  if (h.carried != null && last.carried != null) {
-    const d = h.carried - last.carried;
-    add("斤量", `${h.carried}kg（前走${d === 0 ? "と同じ" : `から${d > 0 ? "+" : ""}${d}kg`}）`, d >= 2 ? "-" : d <= -2 ? "+" : "");
-  }
-  // 9. body weight
-  if (h.bw) add("馬体重", `${h.bw}kg（${h.bw_diff > 0 ? "+" : ""}${h.bw_diff ?? 0}）`, Math.abs(h.bw_diff ?? 0) >= 10 ? "-" : "");
-  // 10. going
-  if (r.going && r.going !== "良") {
-    const w = h.records.heavy;
-    add("馬場", `${r.going}。稍重〜不良では${runs(w) ? rec(w) : "走ったことがない"}`, top3(w) > 0 ? "+" : "");
-  }
-  // 11. pedigree
-  const s = h.sire_rec;
-  if (s && s.n >= 30 && s.base) add("血統", `父${h.sire}の子はこの距離帯で3着内率${pct(s.top3, 0)}（全体平均${pct(s.base, 0)}）`, s.top3 >= s.base * 1.25 ? "+" : s.top3 <= s.base * 0.7 ? "-" : "");
-  return out;
-}
-function dist_label(d) { return d <= 1400 ? "1400m以下" : d <= 1800 ? "1401〜1800m" : d <= 2200 ? "1801〜2200m" : d <= 2600 ? "2201〜2600m" : "2601m以上"; }
-const MARKTXT = { "+": "＋", "-": "－", "": "・" };
+const MARKTXT = { "+": "＋", "-": "－", "": "" };
+const markCls = (m) => (m === "+" ? "sp" : m === "-" ? "sm" : "sn");
+// One row per point a handicapper checks: the horse's situation, and how every
+// horse in the same situation has done (3着内率 against the average, 単勝回収率).
 function checkTable(list) {
-  return `<table class="chk"><tbody>${list.map((c) => `<tr><th>${esc(c.k)}</th><td>${esc(c.v)}</td><td class="c s${c.s === "+" ? "p" : c.s === "-" ? "m" : "n"}">${MARKTXT[c.s]}</td></tr>`).join("")}</tbody></table>`;
+  if (!list?.length) return `<p class="sub small" style="margin:0">過去の出走がないため、比べられる項目がありません。</p>`;
+  const rows = list.map((c) => {
+    const ratio = c.base ? Math.min(2, c.top3 / c.base) : 1;
+    return `<tr><td><div class="ck">${esc(c.k)}</div><div class="cv">${esc(c.v)}</div>${c.d ? `<div class="hs">${esc(c.d)}</div>` : ""}</td>
+      <td class="r nw"><b class="${markCls(c.s)}">${pct(c.top3)}</b><div class="cmp" title="平均を縦線で表示"><i style="width:${ratio * 50}%"></i></div><div class="hs">平均${pct(c.base)}・${c.n.toLocaleString()}頭</div></td>
+      <td class="r nw pc">${c.roi ?? "–"}%</td>
+      <td class="c ${markCls(c.s)}">${MARKTXT[c.s]}</td></tr>`;
+  }).join("");
+  return `<div class="tw"><table class="chk"><thead><tr><th>項目とこの馬</th><th class="r">同じ条件の馬の${term("3着内率")}</th><th class="r pc">${term("回収率", "単勝回収率")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+const CHECK_NOTE = "「同じ条件の馬」は、過去5年に同じ状況で走った全馬の成績です。3着内率が平均の1.2倍以上なら＋、0.8倍以下なら－をつけています（300頭以上の項目のみ。脚質・枠・血統は30頭以上、騎手は50回以上）。";
 
 function detail(h, r) {
   const j = h.jockey_rec;
-  const list = checks(h, r, paceOf(r));
   const rs = h.past.slice(0, 5).map((x) => `<tr><td class="nw">${esc(x.date.slice(2).replaceAll("-", "/"))}</td><td class="nw">${esc(x.venue)}</td>
       <td class="nw">${esc(short(x.name))}</td><td class="nw">${x.surface}${x.distance} ${esc(x.going ?? "")}</td>
       <td class="r nw">${x.field ?? ""}頭${x.pop ?? "-"}人</td><td class="c fin ${x.finish === 1 ? "f1" : ""}">${x.finish ?? esc(x.finish_raw ?? "")}</td>
       <td class="r nw ${x.l3rank === 1 ? "ai1" : ""}">${x.l3 ?? ""}${x.l3rank ? `(${x.l3rank})` : ""}</td><td class="nw">${esc(x.passing ?? "")}</td><td class="nw">${esc(x.jockey ?? "")}</td></tr>`).join("");
   return `<div class="dgrid wide">
-    <div><h4>チェック項目（＋は好材料、－は不安材料）</h4>${checkTable(list)}</div>
+    <div><h4>チェック項目</h4>${checkTable(h.checks)}<p class="small sub" style="margin:4px 0 0">${CHECK_NOTE}</p></div>
     <div>
       ${h.p_ai != null ? `<h4>確率</h4><dl class="kv"><dt>${term("AI勝率")}</dt><dd>${pct(h.p_ai)}</dd>${h.p_sim != null ? `<dt>${term("シミュ", "シミュ勝率")}</dt><dd>${pct(h.p_sim)}</dd><dt>シミュ3着内率</dt><dd>${pct(h.p_sim_place)}</dd>` : ""}</dl>` : ""}
       <h4 style="margin-top:8px">成績（1着-2着-3着-着外）</h4><dl class="kv">
@@ -327,30 +273,31 @@ function trendFacts(r) {
 }
 
 function lookView(r) {
-  const pace = paceOf(r);
   const rank = aiRank(r);
   const mk = (h) => (rank.has(h.horse_id) && rank.get(h.horse_id) < 5 ? `<span class="${rank.get(h.horse_id) === 0 ? "ai1" : ""}">${AIMARK[rank.get(h.horse_id)]}</span>` : "");
-  const lineup = ["逃げ", "先行", "差し", "追込"].map((s) => `<tr><th>${s}</th><td>${r.horses.filter((h) => h.style === s).map((h) => `<span class="lu">${h.number ? `<span class="waku w${h.frame}">${h.number}</span> ` : ""}${esc(h.name)}${mk(h) ? " " + mk(h) : ""}</span>`).join("") || `<span class="sub">なし</span>`}</td></tr>`).join("");
-  const scored = r.horses.map((h) => {
-    const c = checks(h, r, pace);
-    return { h, plus: c.filter((x) => x.s === "+"), minus: c.filter((x) => x.s === "-") };
-  });
-  const order = (a, b) => (b.h.p_ai ?? 0) - (a.h.p_ai ?? 0) || (b.plus.length - b.minus.length) - (a.plus.length - a.minus.length) || (a.h.pop ?? 99) - (b.h.pop ?? 99);
-  const pick = scored.filter((x) => x.plus.length - x.minus.length >= 2).sort(order).slice(0, 5);
+  const st = Object.fromEntries((r.trends.style || []).map((x) => [x.key, x]));
+  const lineup = ["逃げ", "先行", "差し", "追込"].map((s) => {
+    const hs = r.horses.filter((h) => h.style === s);
+    return `<tr><th>${s}<div class="hs">${hs.length}頭</div></th><td>${hs.map((h) => `<span class="lu">${h.number ? `<span class="waku w${h.frame}">${h.number}</span> ` : ""}${esc(h.name)}${mk(h) ? " " + mk(h) : ""}</span>`).join("") || `<span class="sub">なし</span>`}</td>
+      <td class="r nw">${st[s] ? `${pct(st[s].top3, 0)}<div class="hs">${st[s].n}頭</div>` : "–"}</td></tr>`;
+  }).join("");
+  const scored = r.horses.map((h) => ({ h, plus: (h.checks || []).filter((x) => x.s === "+"), minus: (h.checks || []).filter((x) => x.s === "-") }));
+  const net = (x) => x.plus.length - x.minus.length;
+  const pick = scored.filter((x) => net(x) >= 2).sort((a, b) => net(b) - net(a) || (a.h.pop ?? 99) - (b.h.pop ?? 99)).slice(0, 6);
   const shaky = scored.filter((x) => x.h.pop && x.h.pop <= 3 && x.minus.length >= 2);
+  const item = (c) => `<div><span class="${markCls(c.s)}">${MARKTXT[c.s]}</span>${esc(c.k)}「${esc(c.v)}」 3着内率${pct(c.top3, 0)}（平均${pct(c.base, 0)}）</div>`;
   const row = (x) => `<tr><td class="nw">${x.h.number ? `<span class="waku w${x.h.frame}">${x.h.number}</span> ` : ""}<b>${esc(x.h.name)}</b> ${mk(x.h)}
       ${x.h.pop ? `<div class="hs">${x.h.pop}番人気</div>` : ""}${x.h.finish ? `<div class="hs">結果 ${x.h.finish}着</div>` : ""}</td>
-    <td class="small">${x.plus.map((c) => `<div><span class="sp">＋</span>${esc(c.k)}：${esc(c.v)}</div>`).join("")}${x.minus.map((c) => `<div><span class="sm">－</span>${esc(c.k)}：${esc(c.v)}</div>`).join("")}</td></tr>`;
+    <td class="small">${x.plus.map(item).join("")}${x.minus.map(item).join("")}</td></tr>`;
   const facts = trendFacts(r);
-  return `<section class="blk"><h3>展開の見立て：流れは${pace.label}</h3>
-      <p style="margin:0">${esc(pace.why)}</p>
-      <table class="lineup"><tbody>${lineup}</tbody></table>
-      <p class="small sub" style="margin:0">脚質は近5走で最初のコーナーを何番手で回ったかから判定しています。</p></section>
+  return `<section class="blk"><h3>脚質ごとの顔ぶれ</h3>
+      <div class="tw"><table class="lineup"><thead><tr><th>${term("脚質")}</th><th>出走馬</th><th class="r">このコースの3着内率</th></tr></thead><tbody>${lineup}</tbody></table></div>
+      <p class="small sub" style="margin:0">脚質は近5走で最初のコーナーを何番手で回ったかの最多。3着内率は過去5年のこのコースの値です。</p></section>
     ${facts.length ? `<section class="blk"><h3>このコースの傾向（過去5年）</h3><ul class="facts">${facts.map((x) => `<li>${x}</li>`).join("")}</ul></section>` : ""}
-    <section class="blk"><h3>好材料が多い馬</h3>
-      ${pick.length ? `<div class="tw"><table class="picks"><tbody>${pick.map(row).join("")}</tbody></table></div>` : `<p class="sub" style="margin:0">好材料が目立つ馬はいません。</p>`}</section>
-    ${shaky.length ? `<section class="blk"><h3>人気でも不安材料がある馬</h3><div class="tw"><table class="picks"><tbody>${shaky.map(row).join("")}</tbody></table></div></section>` : ""}
-    <p class="small sub" style="margin:0">＋と－は、前走の内容・距離・コース・展開・末脚・間隔・騎手・斤量・馬体重・馬場・血統の11項目をデータで判定したものです。馬の行を押すと各馬の判定を出馬表で見られます。</p>`;
+    <section class="blk"><h3>データ上の好材料が多い馬</h3>
+      ${pick.length ? `<div class="tw"><table class="picks"><tbody>${pick.map(row).join("")}</tbody></table></div>` : `<p class="sub" style="margin:0">＋が－より2つ以上多い馬はいません。</p>`}</section>
+    ${shaky.length ? `<section class="blk"><h3>人気でも－が2つ以上ある馬</h3><div class="tw"><table class="picks"><tbody>${shaky.map(row).join("")}</tbody></table></div></section>` : ""}
+    <p class="small sub" style="margin:0">${CHECK_NOTE}各馬の全項目は、出馬表で馬の行を押すと見られます。</p>`;
 }
 
 // --- 馬柱
@@ -384,8 +331,8 @@ function aiView(r) {
     <td><div class="hn">${esc(h.name)}</div><div class="hs">${esc(h.jockey ?? "")}</div></td>
     <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div></td>
     <td class="r pc">${pct(h.p_sim)}</td><td class="r">${pct(h.p_sim_place, 0)}</td>
-    <td class="pc small">${esc(h.good[0] ?? "")}${h.warn[0] ? `<div class="sub">${esc(h.warn[0])}</div>` : ""}</td></tr>`).join("");
-  return `<div class="tw"><table><thead><tr><th class="c">印</th><th class="c">順</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th><th class="r">${term("AI勝率")}</th><th class="r pc">${term("シミュ", "シミュ勝率")}</th><th class="r">${term("3着内率")}</th><th class="pc">主な理由</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <td class="pc small">${(h.checks || []).filter((c) => c.s).slice(0, 3).map((c) => `<span class="${markCls(c.s)}">${MARKTXT[c.s]}</span>${esc(c.k)} `).join("")}</td></tr>`).join("");
+  return `<div class="tw"><table><thead><tr><th class="c">印</th><th class="c">順</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th><th class="r">${term("AI勝率")}</th><th class="r pc">${term("シミュ", "シミュ勝率")}</th><th class="r">${term("3着内率")}</th><th class="pc">データの＋－</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="small sub" style="margin:0">3着内率はシミュレーションの値。印はAI勝率の上位5頭につけています。<a href="#about">計算方法</a></p>`;
 }
 
@@ -511,7 +458,46 @@ function betView(r) {
       <div class="tot"><b>${list.length}</b>点　${(list.length * 100).toLocaleString()}円（1点100円）</div>
       <div class="combos">${chips || `<span style="border:0;padding:0" class="sub">${empty}</span>`}</div>
       ${fin && list.length ? `<div class="tot">払戻 <b>${back.toLocaleString()}</b>円　${term("回収率")} ${Math.round((back / (list.length * 100)) * 100)}%</div>` : ""}
+      ${r.seg?.surface === "芝" || r.seg?.surface === "ダ" ? `<p class="small" style="margin:8px 0 0">このレースと同じ条件（${esc([r.seg.surface, r.seg.field, r.seg.cls, r.seg.hande, r.seg.fav].filter(Boolean).join("・"))}）の過去レースで、どの買い方が当たりやすく戻りが多かったかを<a href="#strategy" id="to-strategy">買い方を比べる</a>で見られます。</p>` : ""}
     </section></div>`;
+}
+
+// --- 買い方を比べる
+const SEG_LABEL = { surface: "芝・ダート", field: "頭数", cls: "クラス", hande: "ハンデ", fav: "1番人気のオッズ" };
+function segKey(sel, keys) { return keys.map((k) => sel[k] || "").join("|"); }
+function strategyRows(cur, all) {
+  const base = Object.fromEntries(all.strategies.map((x) => [x.key, x]));
+  return cur.strategies.map((x) => {
+    const d = x.roi - base[x.key].roi;
+    return `<tr><td>${esc(x.label)}<div class="hs">${x.tickets}点</div></td><td class="r">${pct(x.hit, 0)}</td>
+      <td class="r"><b>${x.roi}%</b>${cur !== all ? `<div class="hs ${d >= 5 ? "sp" : d <= -5 ? "sm" : ""}">全体比 ${d >= 0 ? "+" : ""}${d}</div>` : ""}</td>
+      <td class="r pc">${x.roi_a ?? "–"}%</td><td class="r pc">${x.roi_b ?? "–"}%</td><td class="r pc">${x.avg != null ? x.avg.toLocaleString() + "円" : "–"}</td></tr>`;
+  }).join("");
+}
+function strategyView() {
+  const S = state.strat;
+  const sel = store.get("seg", {});
+  const k = segKey(sel, S.keys);
+  const cur = S.table[k], all = S.table[segKey({}, S.keys)];
+  const selects = S.keys.map((d) => `<label class="seg"><span>${SEG_LABEL[d]}</span><select data-seg="${d}"><option value="">すべて</option>${S.dims[d].map((v) => `<option ${sel[d] === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>`).join("");
+  const body = !cur ? `<p>この条件のレースは30未満なので出していません。条件をゆるめてください。</p>` : `
+    <div class="facts-row">
+      <div><b>${cur.races.toLocaleString()}</b><span>レース</span></div>
+      <div><b>${pct(cur.fav_top3, 0)}</b><span>1番人気が3着内</span></div>
+      <div><b>${pct(cur.calm, 0)}</b><span>1〜3着がすべて5番人気以内</span></div>
+      <div><b>${(cur.trio_med ?? 0).toLocaleString()}円</b><span>3連複の配当（中央値）</span></div>
+      <div><b>${pct(cur.big, 0)}</b><span>3連単が10万円以上</span></div>
+    </div>
+    <section class="blk"><h3>同じ買い方を全レースで続けた結果</h3>
+      <div class="tw"><table><thead><tr><th>買い方</th><th class="r">的中率</th><th class="r">${term("回収率")}</th><th class="r pc">${S.split[0]}</th><th class="r pc">${S.split[1]}</th><th class="r pc">当たったときの払戻</th></tr></thead>
+      <tbody>${strategyRows(cur, all)}</tbody></table></div>
+      <p class="small sub" style="margin:0">100円ずつ買った場合。回収率100%で買った額がそのまま戻ります。JRAの控除があるため、全体ではどの買い方も100%を下回ります。期間の前半と後半で差が大きい買い方は、たまたまの結果の可能性があります。</p></section>
+    <section class="blk"><h3>人気ごとの成績</h3>
+      <div class="tw"><table><thead><tr><th>人気</th><th class="r">勝率</th><th class="r">3着内率</th><th class="r">単勝回収率</th><th class="r">複勝回収率</th></tr></thead>
+      <tbody>${cur.pops.map((x) => `<tr><td>${x.key}番人気</td><td class="r">${pct(x.win)}</td><td class="r">${pct(x.top3)}</td><td class="r">${x.roi}%</td><td class="r">${x.proi}%</td></tr>`).join("")}</tbody></table></div></section>`;
+  return `<h1 style="font-size:18px">買い方を比べる</h1>
+    <p class="small sub" style="margin:0">${S.years}のJRA平地レースで、人気だけを基準に同じ買い方を続けたら、どれくらい当たってどれくらい戻ったかの集計です。条件を選ぶと、その条件のレースだけで数え直します。</p>
+    <div class="segs">${selects}</div>${body}`;
 }
 
 // --- glossary / about
@@ -590,6 +576,7 @@ document.addEventListener("click", (ev) => {
     store.set("marks:" + r.race_id, ms);
     return render();
   }
+  if (t.id === "to-strategy") { const g = state.race.seg; store.set("seg", { surface: g.surface, field: g.field, cls: g.cls, hande: g.hande, fav: g.fav || undefined }); return; }
   if (t.id === "clear") { store.set("marks:" + state.race.race_id, {}); return render(); }
   if (t.closest("button, a, select, input")) return;
   const row = t.closest("tr.h[data-horse]");
@@ -601,6 +588,8 @@ document.addEventListener("keydown", (ev) => {
 });
 document.addEventListener("change", (ev) => {
   if (ev.target.id === "bet-type") { state.bet = ev.target.value; store.set("bet", state.bet); render(); }
+  const sg = ev.target.dataset?.seg;
+  if (sg) { const sel = store.get("seg", {}); sel[sg] = ev.target.value || undefined; store.set("seg", sel); render(); }
 });
 window.addEventListener("hashchange", () => route().catch(fail));
 function fail(e) { $("#view").innerHTML = `<p>${esc(e.message)}。再読み込みしてください。</p>`; }

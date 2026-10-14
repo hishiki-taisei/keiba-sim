@@ -11,6 +11,7 @@ races run before that race's date.
 Writes portal/www/data/index.json and portal/www/data/race/<race_id>.json.
 """
 import argparse
+import itertools
 import json
 import math
 import re
@@ -132,6 +133,102 @@ def load(db):
     return races, df, horses, payouts
 
 
+HEAVY = ["稍重", "重", "不良"]
+SCRATCHED = ["取", "除"]  # did not start
+
+# Situations a horse can be in before a race. Each is worked out the same way for
+# every past run and for today's entries, so "how did horses in this situation do"
+# is a plain count over the database.
+SITUATIONS = [
+    # (key, label shown on the site)
+    ("s_prev", "前走着順"),
+    ("s_l3", "前走の上がり"),
+    ("s_gap", "間隔"),
+    ("s_dist", "距離の変化"),
+    ("s_maxd", "距離経験"),
+    ("s_course", "コース経験"),
+    ("s_heavy", "道悪の経験"),
+    ("s_jockey", "騎手"),
+    ("s_carried", "斤量の変化"),
+    ("s_bw", "馬体重の増減"),
+]
+
+
+def _band(x, edges, labels, missing=None):
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return missing
+    for lim, lab in zip(edges, labels):
+        if x <= lim:
+            return lab
+    return labels[-1]
+
+
+def add_situations(df):
+    """Label every run with the situation the horse was in before it (from earlier runs only)."""
+    scratched = df[df["finish_raw"].isin(SCRATCHED)]
+    df = df[~df["finish_raw"].isin(SCRATCHED)].sort_values(["horse_id", "date", "race_id"]).copy()
+    g = df.groupby("horse_id", sort=False)
+    prev = {c: g[c].shift() for c in ("date", "finish", "distance", "weight_carried", "jockey_id",
+                                       "jockey_name", "l3rank", "race_id")}
+    first = prev["race_id"].isna()
+    days = (df["date"] - prev["date"]).dt.days
+    wk = days // 7 - 1
+
+    df["s_prev"] = [None if f else ("競走中止など" if math.isnan(x) else _band(x, (1, 3, 5, 9), ("1着", "2〜3着", "4〜5着", "6〜9着", "10着以下")))
+                    for f, x in zip(first, prev["finish"])]
+    df["s_l3"] = [None if f or math.isnan(x) else _band(x, (1, 3), ("1位", "2〜3位", "4位以下"))
+                  for f, x in zip(first, prev["l3rank"])]
+    df["s_gap"] = [None if math.isnan(w) else _band(w, (1, 2, 4, 8, 24), ("連闘・中1週", "中2週", "中3〜4週", "中5〜8週", "中9〜24週", "中25週以上"))
+                   for w in wk]
+    dd = df["distance"] - prev["distance"]
+    df["s_dist"] = [None if math.isnan(x) else _band(x, (-400, -1, 0, 399), ("400m以上短縮", "短縮（300m以内）", "同じ距離", "延長（300m以内）", "400m以上延長"))
+                    for x in dd]
+    maxd = g["distance"].transform(lambda s: s.shift().cummax())
+    df["s_maxd"] = np.where(first, None, np.where(df["distance"] > maxd, "初めての長さ", "経験のある長さ"))
+
+    # earlier top-3 finishes at the same course / on a wet track, same surface
+    def tally(mask, keys):
+        m = mask.astype(int)
+        t3 = (df["top3"] * m)
+        runs = m.groupby(keys).cumsum() - m
+        hits = t3.groupby(keys).cumsum() - t3
+        return runs, hits
+    course_keys = [df["horse_id"], df["venue"], df["surface"], df["distance"]]
+    runs = df.groupby(course_keys).cumcount()
+    hits = df.groupby(course_keys)["top3"].cumsum() - df["top3"]
+    df["s_course"] = np.where(runs == 0, "初めて", np.where(hits > 0, "3着内あり", "走ったが3着内なし"))
+    wet = df["going"].isin(HEAVY)
+    hruns, hhits = tally(wet, [df["horse_id"], df["surface"]])
+    df["s_heavy"] = np.where(~wet, None, np.where(hruns == 0, "初めて", np.where(hhits > 0, "3着内あり", "走ったが3着内なし")))
+
+    def same_jockey(j, pj, n, pn):
+        if isinstance(j, str) and isinstance(pj, str):
+            return j == pj
+        if isinstance(n, str) and isinstance(pn, str):
+            return n.startswith(pn) or pn.startswith(n)
+        return None
+    sj = [same_jockey(*a) for a in zip(df["jockey_id"], prev["jockey_id"], df["jockey_name"], prev["jockey_name"])]
+    df["s_jockey"] = [None if f or x is None else ("前走と同じ騎手" if x else "乗り替わり") for f, x in zip(first, sj)]
+    dc = df["weight_carried"] - prev["weight_carried"]
+    df["s_carried"] = [None if math.isnan(x) else _band(x, (-2, -0.5, 0, 1.5), ("2kg以上減", "1kg減", "同じ", "1kg増", "2kg以上増"))
+                       for x in dc]
+    df["s_bw"] = [_band(x, (-10, -4, 3, 9), ("-10kg以下", "-4〜-8kg", "±2kg以内", "+4〜+8kg", "+10kg以上"))
+                  for x in df["body_weight_diff"]]
+    df.loc[first, ["s_gap", "s_dist", "s_carried"]] = None
+    return pd.concat([df, scratched]).sort_values(["date", "race_id", "finish"])
+
+
+def mark(rate_, base, n, min_n):
+    """+ / - when the rate is clearly above / below the average and the sample is big enough."""
+    if rate_ is None or not base or n < min_n:
+        return ""
+    if rate_ >= base * 1.2:
+        return "+"
+    if rate_ <= base * 0.8:
+        return "-"
+    return ""
+
+
 def rate(g):
     n = len(g)
     return {"n": n, "win": num(g["win"].mean(), 3), "top3": num(g["top3"].mean(), 3),
@@ -147,6 +244,7 @@ def course_trends(df, race, date):
     out = {"races": int(same["race_id"].nunique()), "runs": int(len(same))}
     if not len(same):
         return out
+    out["base"] = num(same["top3"].mean(), 3)
     out["frame"] = [{"key": int(k), **rate(g)} for k, g in same.groupby("frame") if k > 0]
     out["style"] = [{"key": k, **rate(same[same["style"] == k])} for k in ("逃げ", "先行", "差し", "追込")]
     pop = same["popularity"].clip(upper=10)
@@ -167,13 +265,31 @@ class Cutoff:
     def __init__(self, df, date):
         self.date = date
         year = df[(df["date"] < date) & (df["date"] >= date - pd.DateOffset(years=1))]
-        self.jockey = year.groupby("jockey_id").agg(n=("top3", "size"), top3=("top3", "mean"), win=("win", "mean"))
-        self.jockey_by_name = year.groupby("jockey_name").agg(n=("top3", "size"), top3=("top3", "mean"),
-                                                              win=("win", "mean"))
+        agg = dict(n=("top3", "size"), top3=("top3", "mean"), win=("win", "mean"), ret=("ret", "mean"))
+        self.jockey = year.groupby("jockey_id").agg(**agg)
+        self.jockey_by_name = year.groupby("jockey_name").agg(**agg)
+        self.jockey_base = year["top3"].mean()
         five = df[(df["date"] < date) & (df["date"] >= date - pd.DateOffset(years=5))]
         self.sire = five.groupby(["sire_id", "surface", "band"]).agg(
             n=("top3", "size"), top3=("top3", "mean"), win=("win", "mean"), ret=("ret", "mean"))
         self.base = five.groupby(["surface", "band"]).agg(top3=("top3", "mean"))
+        five = five[~five["finish_raw"].isin(SCRATCHED)]
+        self.sit = {k: five.groupby(["surface", k]).agg(**agg) for k, _ in SITUATIONS}
+        self.sit_base = five.groupby("surface")["top3"].mean()
+        wet = five[five["going"].isin(HEAVY)]
+        self.sit["s_heavy"] = wet.groupby(["surface", "s_heavy"]).agg(**agg)
+        self.wet_base = wet.groupby("surface")["top3"].mean()
+
+    def situation(self, key, value, surface):
+        """How horses in the same situation did over the last five years, same surface."""
+        t = self.sit[key]
+        if value is None or (surface, value) not in t.index:
+            return None
+        r = t.loc[(surface, value)]
+        base = (self.wet_base if key == "s_heavy" else self.sit_base).get(surface)
+        n, top3 = int(r["n"]), num(r["top3"], 3)
+        return {"n": n, "top3": top3, "win": num(r["win"], 3), "roi": num(r["ret"], 0), "base": num(base, 3),
+                "s": mark(top3, base, n, 300)}
 
     def jockey_rec(self, jid, name):
         t = self.jockey
@@ -185,7 +301,7 @@ class Cutoff:
             if not hit:
                 return None
             r = t.loc[max(hit, key=lambda n: t.loc[n, "n"])]
-        return {"n": int(r["n"]), "top3": num(r["top3"], 3), "win": num(r["win"], 3)}
+        return {"n": int(r["n"]), "top3": num(r["top3"], 3), "win": num(r["win"], 3), "roi": num(r["ret"], 0)}
 
     def sire_rec(self, sid, surface, band):
         k = (sid, surface, band)
@@ -219,46 +335,75 @@ def record(hist, mask):
     return [int((f == 1).sum()), int((f == 2).sum()), int((f == 3).sum()), int(((f > 3) | f.isna()).sum())]
 
 
-def reasons(h, race):
-    """Plain-language points for beginners: (good, caution)."""
-    good, warn = [], []
-    runs = h["past"]
-    if not runs:
-        return ["データがまだ少ない馬です"], []
-    last = runs[0]
-    if last["finish"] == 1:
-        good.append(f"前走「{last['name']}」で1着")
-    elif last["finish"] and last["finish"] <= 3:
-        good.append(f"前走「{last['name']}」で{last['finish']}着と好走")
-    if any(r["l3rank"] == 1 for r in runs[:3]):
-        good.append("最近の3走で、ゴール前の末脚（上がり3F）がメンバー最速だったことがある")
-    rec = h["records"]["band"]
-    if rec[0] + rec[1] + rec[2] > 0:
-        good.append(f"同じくらいの距離（{dist_band(race['distance'])}）で3着以内に入ったことがある")
-    rec = h["records"]["course"]
-    if rec[0] + rec[1] + rec[2] > 0:
-        good.append(f"{race['venue']}の{race['surface']}コースで3着以内の経験あり")
+def _detail(key, h, race, e):
+    """The horse's own numbers behind a situation label."""
+    p = h["past"][0] if h["past"] else None
+    if not p:
+        return None
+    if key == "s_prev":
+        return f"{p['name']} {p['finish'] or p['finish_raw']}着（{p['pop']}番人気）" if p["pop"] else f"{p['name']}"
+    if key == "s_l3":
+        return f"前走の上がり{p['l3']}秒（メンバー{p['l3rank']}位）" if p["l3"] else None
+    if key == "s_gap":
+        return f"前走 {p['date']}"
+    if key == "s_dist":
+        return f"前走{p['surface']}{p['distance']}m → 今回{race['surface']}{race['distance']}m"
+    if key == "s_maxd":
+        return f"これまでの最長{max(r['distance'] for r in h['past'])}m"
+    if key == "s_course":
+        rec = h["records"]["course_exact"]
+        return f"{race['venue']}{race['surface']}{race['distance']}mで{'-'.join(map(str, rec))}"
+    if key == "s_heavy":
+        return f"{race['surface']}の稍重〜不良で{'-'.join(map(str, h['records']['heavy']))}"
+    if key == "s_jockey":
+        return f"前走{p['jockey']} → 今回{h['jockey']}"
+    if key == "s_carried":
+        return f"{p['carried']}kg → {h['carried']}kg" if p["carried"] and h["carried"] else None
+    if key == "s_bw":
+        return f"{h['bw']}kg（{h['bw_diff']:+d}）" if h["bw"] is not None and h["bw_diff"] is not None else None
+    return None
+
+
+def checks(h, race, e, cut, trends):
+    """Each point a handicapper looks at, with how horses in the same spot did in the past."""
+    out = []
+    surface, band = race["surface"], dist_band(race["distance"])
+    for key, label in SITUATIONS:
+        v = e.get(key)
+        if not isinstance(v, str):
+            continue
+        st = cut.situation(key, v, surface)
+        if st:
+            out.append({"k": label, "v": v, "d": _detail(key, h, race, e),
+                        "scope": f"{surface}の全レース・過去5年" if key != "s_heavy" else f"{surface}の稍重〜不良・過去5年", **st})
+    tb = trends.get("base")
+    st = next((x for x in trends.get("style", []) if x["key"] == h.get("style")), None)
+    if st:
+        out.append({"k": "脚質", "v": h["style"], "d": "近5走で最も多い位置取り", "scope": "このコース・過去5年",
+                     "n": st["n"], "top3": st["top3"], "win": st["win"], "roi": st["roi"], "base": tb,
+                     "s": mark(st["top3"], tb, st["n"], 30)})
+    if h.get("frame") and trends.get("frame"):
+        st = next((x for x in trends["frame"] if x["key"] == h["frame"]), None)
+        if st:
+            out.append({"k": "枠", "v": f"{h['frame']}枠", "d": None, "scope": "このコース・過去5年",
+                         "n": st["n"], "top3": st["top3"], "win": st["win"], "roi": st["roi"], "base": tb,
+                         "s": mark(st["top3"], tb, st["n"], 30)})
     j = h.get("jockey_rec")
-    if j and j["n"] >= 50 and j["top3"] >= 0.33:
-        good.append(f"騎手の{h['jockey']}は最近1年で3回に1回以上3着以内（{j['top3'] * 100:.0f}%）")
-    s = h.get("sire_rec")
-    if s and s["n"] >= 30 and s["base"] and s["top3"] >= s["base"] * 1.25:
-        good.append(f"父{h['sire']}の子はこの距離で平均より好成績（3着内率{s['top3'] * 100:.0f}%）")
-    if s and s["n"] >= 30 and s["base"] and s["top3"] <= s["base"] * 0.7:
-        warn.append(f"父{h['sire']}の子はこの距離で平均より成績が落ちる")
-    gap = (pd.Timestamp(race["date"]) - pd.Timestamp(last["date"])).days
-    if gap >= 90:
-        warn.append(f"前走から{gap // 7}週間あいた休み明け")
-    longest = max(r["distance"] for r in runs)
-    if race["distance"] - longest >= 400:
-        warn.append(f"今回が初めての長い距離（これまでの最長は{longest}m）")
-    if h.get("bw_diff") is not None and abs(h["bw_diff"]) >= 12:
-        warn.append(f"馬体重が前走から{h['bw_diff']:+d}kgと大きく変わった")
-    return good[:3], warn[:2]
+    if j:
+        base = num(cut.jockey_base, 3)
+        out.append({"k": "騎手の成績", "v": h["jockey"], "d": None, "scope": "この騎手の全レース・直近1年",
+                     **j, "base": base, "s": mark(j["top3"], base, j["n"], 50)})
+    sr = h.get("sire_rec")
+    if sr:
+        out.append({"k": "血統", "v": f"父{h['sire']}", "d": None, "scope": f"父の産駒・{surface}{band}・過去5年",
+                     "n": sr["n"], "top3": sr["top3"], "win": sr["win"], "roi": sr["roi"], "base": sr["base"],
+                     "s": mark(sr["top3"], sr["base"], sr["n"], 30)})
+    return out
 
 
 def race_payload(race, entrants, df, cut, payouts, preds=None):
     date = pd.Timestamp(race["date"])
+    trends = course_trends(df, race, date)
     hist_all = df[df["date"] < date]
     by_horse = {k: g for k, g in hist_all[hist_all["horse_id"].isin(entrants["horse_id"])].groupby("horse_id")}
     band = dist_band(race["distance"])
@@ -285,6 +430,8 @@ def race_payload(race, entrants, df, cut, payouts, preds=None):
                 "all": record(hist, pd.Series(True, index=hist.index)),
                 "band": record(hist, (hist["band"] == band) & (hist["surface"] == race["surface"])),
                 "course": record(hist, (hist["venue"] == race["venue"]) & (hist["surface"] == race["surface"])),
+                "course_exact": record(hist, (hist["venue"] == race["venue"]) & (hist["surface"] == race["surface"])
+                                       & (hist["distance"] == race["distance"])),
                 "heavy": record(hist, hist["going"].isin(["稍重", "重", "不良"]) & (hist["surface"] == race["surface"])),
             },
             "prize": num(hist["prize"].sum(), 0),
@@ -297,17 +444,143 @@ def race_payload(race, entrants, df, cut, payouts, preds=None):
             p = preds.get(h["name"])
             if p:
                 h.update(p)
-        h["good"], h["warn"] = reasons(h, race)
+        h["checks"] = checks(h, race, e, cut, trends)
         horses.append(h)
     out = {k: (num(v) if not isinstance(v, str) else v) for k, v in race.items()}
     out["date"] = date.strftime("%Y-%m-%d")
     out["horses"] = horses
-    out["trends"] = course_trends(df, race, date)
+    out["trends"] = trends
     pay = payouts[payouts["race_id"] == race["race_id"]]
     out["payouts"] = [{"type": r.bet_type, "combo": r.combo, "payout": int(r.payout), "pop": num(r.popularity)}
                       for r in pay.itertuples()]
     out["has_ai"] = preds is not None
+    out["seg"] = seg_of(race, entrants["odds"].min())
     return out
+
+
+# --- betting by situation -------------------------------------------------
+SEG_DIMS = {
+    "surface": ["芝", "ダ"],
+    "field": ["〜10頭", "11〜14頭", "15頭〜"],
+    "cls": ["新馬・未勝利", "1〜3勝クラス", "オープン・重賞"],
+    "hande": ["ハンデ戦", "ハンデ戦以外"],
+    "fav": ["1番人気が1倍台", "2倍台", "3倍台", "4倍以上"],
+}
+# (key, label, tickets per race); horses are picked by popularity rank only
+STRATEGIES = [
+    ("win1", "1番人気の単勝", 1),
+    ("place1", "1番人気の複勝", 1),
+    ("q12", "1-2番人気の馬連", 1),
+    ("w12", "1-2番人気のワイド", 1),
+    ("t123", "1・2・3番人気の3連複", 1),
+    ("q1x", "1番人気から2〜5番人気へ馬連流し", 4),
+    ("t1x", "1番人気軸で2〜6番人気へ3連複流し", 10),
+    ("tf1x", "1番人気1着固定、2〜4番人気へ3連単", 6),
+    ("win456", "4・5・6番人気の単勝", 3),
+    ("win789", "7・8・9番人気の単勝", 3),
+]
+
+
+def seg_of(race, fav_odds):
+    ct = str(race.get("class_text") or "")
+    grade = race.get("grade")
+    if "新馬" in ct or "未勝利" in ct:
+        cls = "新馬・未勝利"
+    elif isinstance(grade, str) or "オープン" in ct:
+        cls = "オープン・重賞"
+    else:
+        cls = "1〜3勝クラス"
+    n = race.get("n_runners") or 0
+    fav = None
+    if fav_odds is not None and not (isinstance(fav_odds, float) and math.isnan(fav_odds)):
+        fav = _band(fav_odds, (1.99, 2.99, 3.99), SEG_DIMS["fav"])
+    return {"surface": race.get("surface"), "field": _band(n, (10, 14), SEG_DIMS["field"]), "cls": cls,
+            "hande": "ハンデ戦" if "ハンデ" in ct else "ハンデ戦以外", "fav": fav}
+
+
+def strategy_table(races, df, payouts):
+    """Historical hit rate and return of simple, popularity-based bets, by race situation."""
+    pay = {(r.race_id, r.bet_type, r.combo): r.payout for r in payouts.itertuples()}
+    paid = set(payouts["race_id"])
+    runs = df[df["popularity"].notna() & ~df["finish_raw"].isin(SCRATCHED)]
+    rows, horse_rows = [], []
+    meta = races.set_index("race_id")
+    for rid, g in runs.groupby("race_id"):
+        race = meta.loc[rid]
+        g = g.sort_values("popularity")
+        nums = [int(x) for x in g["number"]]
+        if len(nums) < 6 or race["surface"] not in ("芝", "ダ") or rid not in paid:
+            continue
+        p = {i + 1: nums[i] for i in range(min(9, len(nums)))}
+        get = lambda t, c: pay.get((rid, t, c), 0)  # noqa: E731
+        pair = lambda a, b: "-".join(map(str, sorted((a, b))))  # noqa: E731
+        trio = lambda a, b, c: "-".join(map(str, sorted((a, b, c))))  # noqa: E731
+        ret = {
+            "win1": get("単勝", str(p[1])),
+            "place1": get("複勝", str(p[1])),
+            "q12": get("馬連", pair(p[1], p[2])),
+            "w12": get("ワイド", pair(p[1], p[2])),
+            "t123": get("三連複", trio(p[1], p[2], p[3])),
+            "q1x": sum(get("馬連", pair(p[1], p[k])) for k in range(2, 6)),
+            "t1x": sum(get("三連複", trio(p[1], p[a], p[b])) for a in range(2, 7) for b in range(a + 1, 7)),
+            "tf1x": sum(get("三連単", f"{p[1]}-{p[a]}-{p[b]}") for a in range(2, 5) for b in range(2, 5) if a != b),
+            "win456": sum(get("単勝", str(p[k])) for k in (4, 5, 6)),
+            "win789": sum(get("単勝", str(p[k])) for k in (7, 8, 9) if k in p),
+        }
+        fav = g["odds"].iloc[0]
+        row = {"race_id": rid, "year": race["date"].year, **seg_of(race.to_dict(), fav), **ret}
+        top3 = g[g["finish"] <= 3]
+        row["fav_top3"] = int(g["finish"].iloc[0] <= 3) if not math.isnan(g["finish"].iloc[0]) else 0
+        row["top_pop_max"] = int(top3["popularity"].max()) if len(top3) else 99
+        rows.append(row)
+        for x in g.itertuples():
+            horse_rows.append((rid, int(x.popularity), x.win, x.top3, x.ret, get("複勝", str(int(x.number)))))
+    R = pd.DataFrame(rows)
+    H = pd.DataFrame(horse_rows, columns=["race_id", "pop", "win", "top3", "ret", "pret"])
+    trio_pay = payouts[payouts["bet_type"] == "三連複"].groupby("race_id")["payout"].max()
+    tri_pay = payouts[payouts["bet_type"] == "三連単"].groupby("race_id")["payout"].max()
+    R["trio"] = R["race_id"].map(trio_pay)
+    R["trifecta"] = R["race_id"].map(tri_pay)
+    H = H.merge(R[["race_id"] + list(SEG_DIMS)], on="race_id")
+    H["pband"] = H["pop"].map(lambda k: str(k) if k <= 5 else ("6〜9" if k <= 9 else "10〜"))
+    split = (R["year"] <= 2020)
+
+    out = {}
+    keys = list(SEG_DIMS)
+    for combo in itertools.product(*[[None] + SEG_DIMS[k] for k in keys]):
+        m = pd.Series(True, index=R.index)
+        hm = pd.Series(True, index=H.index)
+        for k, v in zip(keys, combo):
+            if v is not None:
+                m &= R[k] == v
+                hm &= H[k] == v
+        sub = R[m]
+        if len(sub) < 30:
+            continue
+        strat = []
+        for k, label, n in STRATEGIES:
+            a, b = sub[split[m]], sub[~split[m]]
+            strat.append({"key": k, "label": label, "tickets": n,
+                          "hit": num((sub[k] > 0).mean(), 3), "roi": num(sub[k].sum() / (len(sub) * n), 0),
+                          "roi_a": num(a[k].sum() / (len(a) * n), 0) if len(a) else None,
+                          "roi_b": num(b[k].sum() / (len(b) * n), 0) if len(b) else None,
+                          "avg": num(sub.loc[sub[k] > 0, k].mean(), 0) if (sub[k] > 0).any() else None})
+        hs = H[hm]
+        pops = [{"key": pb, "win": num(gg["win"].mean(), 3), "top3": num(gg["top3"].mean(), 3),
+                 "roi": num(gg["ret"].mean(), 0), "proi": num(gg["pret"].mean(), 0)}
+                for pb, gg in hs.groupby("pband", sort=False)]
+        order = ["1", "2", "3", "4", "5", "6〜9", "10〜"]
+        pops.sort(key=lambda x: order.index(x["key"]))
+        out["|".join(v or "" for v in combo)] = {
+            "races": int(len(sub)),
+            "fav_top3": num(sub["fav_top3"].mean(), 3),
+            "calm": num((sub["top_pop_max"] <= 5).mean(), 3),
+            "trio_med": num(sub["trio"].median(), 0), "trifecta_med": num(sub["trifecta"].median(), 0),
+            "big": num((sub["trifecta"] >= 100000).mean(), 3),
+            "strategies": strat, "pops": pops,
+        }
+    years = f"{int(R['year'].min())}〜{int(R['year'].max())}年"
+    return {"dims": SEG_DIMS, "keys": keys, "years": years, "split": ["2015〜2020年", "2021年〜"], "table": out}
 
 
 def dump(obj):
@@ -369,6 +642,14 @@ def main():
     ent["trainer_name"] = ent["horse_name"].map(last_run["trainer_name"])
     ent["stable"] = ent["horse_name"].map(last_run["stable"])
     date = pd.Timestamp(KIKKA["date"])
+    # today's entries go through the same situation labelling as every past run
+    for k in ("race_id", "venue", "name", "grade", "surface", "distance", "course_note"):
+        ent[k] = KIKKA[k]
+    ent["date"], ent["n_runners"], ent["going"] = date, len(ent), None
+    ent["finish"], ent["finish_raw"], ent["top3"], ent["win"], ent["ret"] = np.nan, None, 0, 0, 0.0
+    df = add_situations(pd.concat([df, ent], ignore_index=True))
+    ent = df[df["race_id"] == KIKKA["race_id"]].set_index("horse_name").loc[names].reset_index()
+    df = df[df["race_id"] != KIKKA["race_id"]]
     kikka = race_payload({**KIKKA, "n_runners": len(ent)}, ent, df, Cutoff(df, date), payouts, preds)
     kikka["note"] = "出走予定馬での予想です。枠順とオッズは未確定、騎手は予定または前走の騎手です。"
     (OUT / "race" / f"{KIKKA['race_id']}.json").write_text(dump(kikka))
@@ -395,6 +676,7 @@ def main():
         (OUT / "race" / f"{r['race_id']}.json").write_text(
             dump(race_payload(r, ent, df, cut, payouts)))
         index["history"].append(summary(r))
+    (OUT / "strategy.json").write_text(dump(strategy_table(races, df, payouts)))
     (OUT / "index.json").write_text(dump(index))
     print("done")
 

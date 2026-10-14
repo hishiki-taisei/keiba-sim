@@ -246,3 +246,24 @@ table.lineup td { white-space: normal; line-height: 1.9; }
 table.picks td { vertical-align: top; }
 ol.steps { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; max-width: 66ch; }
 ol.steps li p { margin: 2px 0 0; }
+
+/* data checklist */
+table.chk thead th { font-size: 12px; }
+table.chk tbody th { vertical-align: top; }
+table.chk td { vertical-align: top; }
+.cmp { position: relative; height: 4px; width: 72px; margin: 3px 0 2px auto; background: var(--bar-bg); }
+.cmp i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--barc); }
+.cmp::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--fg); }
+.sn { color: var(--sub); }
+
+/* strategy page */
+.segs { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 12px 0; }
+.seg { display: grid; gap: 2px; font-size: 12px; color: var(--sub); }
+.seg select { font: inherit; font-size: 14px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); padding: 4px 6px; border-radius: 4px; }
+.facts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); border: 1px solid var(--line); margin-bottom: 12px; }
+.facts-row div { padding: 8px 10px; border-right: 1px solid var(--line); display: grid; }
+.facts-row b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.facts-row span { font-size: 12px; color: var(--sub); }
+.ck { font-size: 12px; color: var(--sub); }
+.cv { font-weight: 600; }
+table.chk td:first-child { white-space: normal; min-width: 9em; }
