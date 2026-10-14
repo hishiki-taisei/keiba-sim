@@ -1,0 +1,37 @@
+<meta charset="utf-8">
+<title>うまミル</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="style.css">
+
+<header class="top">
+  <div class="top-in">
+    <a class="logo" href="#">うまミル<small>競馬予想・データ</small></a>
+    <nav class="top-nav">
+      <a href="#glossary">用語集</a>
+      <a href="#about">AIの成績</a>
+    </nav>
+    <div class="mode" role="group" aria-label="表示モード">
+      <button type="button" id="mode-easy" data-mode="easy">かんたん</button>
+      <button type="button" id="mode-pro" data-mode="pro">くわしく</button>
+    </div>
+  </div>
+</header>
+
+<main id="view" class="wrap"><p class="muted">読み込み中…</p></main>
+
+<footer class="wrap foot">
+  データ：JRA 2015年1月〜2026年10月4日の全レース（netkeiba掲載の結果から収集）。試作版のため、表示は直近の開催日と菊花賞に限っています。
+</footer>
+
+<div id="pop" class="pop" role="tooltip" hidden></div>
+<div id="drawer" class="drawer" hidden>
+  <div class="drawer-back" data-close="1"></div>
+  <section class="drawer-panel" aria-modal="true" role="dialog" aria-labelledby="dr-title">
+    <button type="button" class="drawer-x" data-close="1" aria-label="閉じる">×</button>
+    <div id="drawer-body"></div>
+  </section>
+</div>
+
+<script src="app.js"></script>

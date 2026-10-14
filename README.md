@@ -32,3 +32,18 @@ cd web && python3 -m http.server # http://localhost:8000 で表示
 2. 能力値の推定：過去の走りから各馬のスピード・スタミナ・瞬発力・脚質を推定
 3. 検証：年で学習用とテスト用に分けて実際の着順と比べ、馬券の買い方ごとの回収率も確認
 4. 公開：Cloudflare Pages。菊花賞の枠順確定後に予想を更新
+
+## 予想サイトの試作版（`portal/`）
+
+初心者向けの「かんたん」と上級者向けの「くわしく」を切り替えられる予想サイトです。
+DBを読み出し専用で開き、予想モデルのコードは読み込みません（予想はCSVから読みます）。
+
+```bash
+python3 portal/build.py --db /mnt/project-files/keiba-sim/data/keiba.sqlite \
+    --predictions /mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv
+cd portal/www && python3 -m http.server   # http://localhost:8000
+```
+
+- 菊花賞2026（出走予定馬）、直近2開催日の全レース、過去の菊花賞を `portal/www/data/` に書き出します（`--days` で日数を変更）
+- 画面：予想（確率順のカードと根拠の文章）／出馬表（並べ替え・列の切替・期待値）／コース傾向／印と買い目（結果の答え合わせ）／結果
+- 近走・騎手・種牡馬・コース傾向の数字は、そのレースの日より前のレースだけで集計しています
