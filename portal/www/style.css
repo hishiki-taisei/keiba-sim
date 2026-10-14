@@ -227,3 +227,22 @@ dl.gl dt { font-weight: 700; } dl.gl dd { margin: 0; max-width: 60ch; }
   dl.gl div { grid-template-columns: 1fr; gap: 0; }
   .grid-races td { padding: 5px 6px; }
 }
+
+/* checklist (pro points) */
+.dgrid.wide { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+@media (max-width: 640px) { .dgrid.wide { grid-template-columns: minmax(0, 1fr); } }
+table.chk { width: 100%; font-size: 13px; }
+table.chk th { text-align: left; font-weight: 500; color: var(--sub); white-space: nowrap; width: 5.5em; background: none; }
+table.chk td { white-space: normal; }
+table.chk td.c { width: 1.8em; font-weight: 700; }
+.sp, .c.sp { color: var(--accent); font-weight: 700; }
+.sm, .c.sm { color: var(--red); font-weight: 700; }
+.c.sn { color: var(--sub); }
+.sp, .sm { margin-right: 2px; }
+table.lineup { width: 100%; }
+table.lineup th { width: 3.5em; text-align: left; vertical-align: top; font-weight: 500; }
+table.lineup td { white-space: normal; line-height: 1.9; }
+.lu { display: inline-block; margin-right: 14px; white-space: nowrap; }
+table.picks td { vertical-align: top; }
+ol.steps { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; max-width: 66ch; }
+ol.steps li p { margin: 2px 0 0; }

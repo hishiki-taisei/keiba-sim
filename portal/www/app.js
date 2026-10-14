@@ -13,7 +13,7 @@ const md = (s) => { const d = new Date(s + "T00:00:00"); return `${d.getMonth() 
 const ymd = (s) => { const d = new Date(s + "T00:00:00"); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${WD[d.getDay()]})`; };
 
 const TERMS = {
-  "AI勝率": "過去11年分のレース結果から学習したモデルが出した、1着になる確率。オッズは使っていません。",
+  "AI勝率": "過去のレース結果から学習したモデルが出した、1着になる確率。出走馬全員分を足すと100%。当日のオッズは使っていません。計算方法は「AIの仕組み」ページにあります。",
   "3着内率": "3着以内に入る確率、または入った割合。",
   "シミュ": "コースを再現した仮想レースを何千回も走らせて、1着になった割合。",
   "単勝": "1着の馬を当てる馬券。数字は100円が何倍になるか。",
@@ -74,7 +74,7 @@ async function route() {
       state.race = await getJSON(`data/race/${id}.json`);
       state.open = null;
       state.sort = state.race.horses.some((x) => x.number) ? { key: "num", dir: 1 } : { key: "ai", dir: -1 };
-      if (!["card", "pp", "ai", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "result" && !done(state.race))) state.tab = "card";
+      if (!["card", "look", "pp", "ai", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "result" && !done(state.race))) state.tab = "card";
     }
   } else state.race = null;
   render();
@@ -152,12 +152,12 @@ function raceHead(r) {
 }
 
 function raceView(r) {
-  const tabs = [["card", "出馬表"], ["pp", "馬柱"]];
+  const tabs = [["card", "出馬表"], ["look", "見どころ"], ["pp", "馬柱"]];
   if (r.has_ai) tabs.push(["ai", "AI予想"]);
   tabs.push(["data", "データ"]);
   if (done(r)) tabs.push(["result", "結果"]);
   tabs.push(["bet", "買い目"]);
-  const view = { card: cardView, pp: ppView, ai: aiView, data: dataView, result: resultView, bet: betView }[state.tab](r);
+  const view = { card: cardView, look: lookView, pp: ppView, ai: aiView, data: dataView, result: resultView, bet: betView }[state.tab](r);
   return `${raceNav(r)}${raceHead(r)}
     ${r.note ? `<p class="notice" style="margin:0">※${esc(r.note)}</p>` : ""}
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${state.tab === k}">${l}</button>`).join("")}</div>
@@ -211,33 +211,146 @@ function cardView(r) {
       ${r.has_ai ? sortHead("ai", "AI勝率", "r") : ""}
       <th class="pc">前走</th>${fin ? sortHead("fin", "着順", "c") : ""}</tr></thead>
     <tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">馬の行を押すと、成績・血統・近走が開きます。${r.has_ai ? `${term("AI勝率")}は1着になる確率の見積もりで、◎○▲△はその上位5頭です。` : "AI勝率は、いまは菊花賞だけに出しています。"}</p>`;
+    <p class="small sub" style="margin:0">馬の行を押すと、成績・血統・近走が開きます。${r.has_ai ? `${term("AI勝率")}は1着になる確率の見積もりで、◎○▲△はその上位5頭です（<a href="#about">計算方法</a>）。` : "AI勝率は、いまは菊花賞だけに出しています。"}</p>`;
+}
+
+// --- the checks a handicapper runs through, per horse
+const sameJockey = (a, b) => !!a && !!b && (a.includes(b) || b.includes(a) || a.replace(/^[A-Z]\./, "").slice(0, 2) === b.replace(/^[A-Z]\./, "").slice(0, 2));
+const top3 = (a) => a[0] + a[1] + a[2];
+const runs = (a) => a[0] + a[1] + a[2] + a[3];
+
+function paceOf(r) {
+  const n = r.horses.length;
+  const c = { 逃げ: 0, 先行: 0, 差し: 0, 追込: 0 };
+  for (const h of r.horses) if (h.style) c[h.style]++;
+  const front = c.逃げ + c.先行;
+  if (c.逃げ >= 3 || front / n >= 0.5) return { key: "high", label: "速くなりそう", why: `逃げ・先行タイプが${front}頭（うち逃げ${c.逃げ}頭）と多く、前の争いが激しくなりやすい。前に行く馬には厳しく、後ろで脚をためる馬に向く。`, c };
+  if (c.逃げ <= 1 && front / n <= 0.3) return { key: "slow", label: "落ち着きそう", why: `逃げタイプが${c.逃げ}頭、先行タイプも${c.先行}頭と少なく、ゆったり流れやすい。前にいる馬が止まりにくく、後ろの馬は届きにくい。`, c };
+  return { key: "mid", label: "平均的", why: `逃げ${c.逃げ}頭・先行${c.先行}頭で、極端な流れにはなりにくい。`, c };
+}
+
+function checks(h, r, pace) {
+  const out = [];
+  const add = (k, v, s = "") => out.push({ k, v, s });
+  const last = h.past[0];
+  if (!last) { add("経験", "初出走。比べる材料がない", ""); return out; }
+  // 1. form
+  const lv = `${short(last.name)} ${last.finish ?? last.finish_raw}着（${last.field}頭・${last.pop ?? "-"}番人気）${last.behind > 0 ? `、勝ち馬と${last.behind}秒差` : ""}`;
+  add("前走の内容", lv, last.finish === 1 || (last.grade && last.finish <= 3) || (last.behind != null && last.behind <= 0.2) ? "+" : last.behind >= 1.0 ? "-" : "");
+  // 2. distance
+  const longest = Math.max(...h.past.map((x) => x.distance));
+  const b = h.records.band;
+  const firstLong = r.distance - longest >= 400;
+  add("距離", `${dist_label(r.distance)}で${rec(b)}、これまでの最長は${longest}m${firstLong ? "（今回が初めての距離）" : ""}`, top3(b) > 0 ? "+" : firstLong ? "-" : "");
+  // 3. course
+  const c = h.records.course;
+  add("コース", runs(c) ? `${r.venue}${r.surface}で${rec(c)}` : `${r.venue}${r.surface}は初めて`, top3(c) > 0 ? "+" : "");
+  // 4. pace vs style
+  if (h.style) {
+    const back = h.style === "差し" || h.style === "追込";
+    const s = pace.key === "high" ? (back ? "+" : h.style === "逃げ" ? "-" : "") : pace.key === "slow" ? (!back ? "+" : h.style === "追込" ? "-" : "") : "";
+    add("展開", `${h.style}タイプ。流れは${pace.label}見立て`, s);
+  }
+  // 5. finishing speed
+  const l3 = h.past.slice(0, 3).map((x) => x.l3rank).filter(Boolean);
+  if (l3.length) {
+    const avg = l3.reduce((a, x) => a + x, 0) / l3.length;
+    add("末脚", `近${l3.length}走の上がり順位は ${l3.join("・")} 位`, l3.includes(1) || avg <= 3 ? "+" : avg >= 8 ? "-" : "");
+  }
+  // 6. spacing
+  const gap = Math.round((new Date(r.date) - new Date(last.date)) / 86400000);
+  add("間隔", `前走から${Math.round(gap / 7)}週${gap >= 90 ? "（休み明け）" : gap <= 13 ? "（詰めて使う）" : ""}`, gap >= 90 ? "-" : "");
+  // 7. jockey
+  const j = h.jockey_rec;
+  const keep = sameJockey(h.jockey, last.jockey);
+  add("騎手", `${keep ? "前走と同じ" : `乗り替わり（前走は${last.jockey}）`}${j ? `。直近1年の3着内率${pct(j.top3, 0)}` : ""}`, j && j.n >= 50 && j.top3 >= 0.35 ? "+" : "");
+  // 8. weight carried
+  if (h.carried != null && last.carried != null) {
+    const d = h.carried - last.carried;
+    add("斤量", `${h.carried}kg（前走${d === 0 ? "と同じ" : `から${d > 0 ? "+" : ""}${d}kg`}）`, d >= 2 ? "-" : d <= -2 ? "+" : "");
+  }
+  // 9. body weight
+  if (h.bw) add("馬体重", `${h.bw}kg（${h.bw_diff > 0 ? "+" : ""}${h.bw_diff ?? 0}）`, Math.abs(h.bw_diff ?? 0) >= 10 ? "-" : "");
+  // 10. going
+  if (r.going && r.going !== "良") {
+    const w = h.records.heavy;
+    add("馬場", `${r.going}。稍重〜不良では${runs(w) ? rec(w) : "走ったことがない"}`, top3(w) > 0 ? "+" : "");
+  }
+  // 11. pedigree
+  const s = h.sire_rec;
+  if (s && s.n >= 30 && s.base) add("血統", `父${h.sire}の子はこの距離帯で3着内率${pct(s.top3, 0)}（全体平均${pct(s.base, 0)}）`, s.top3 >= s.base * 1.25 ? "+" : s.top3 <= s.base * 0.7 ? "-" : "");
+  return out;
+}
+function dist_label(d) { return d <= 1400 ? "1400m以下" : d <= 1800 ? "1401〜1800m" : d <= 2200 ? "1801〜2200m" : d <= 2600 ? "2201〜2600m" : "2601m以上"; }
+const MARKTXT = { "+": "＋", "-": "－", "": "・" };
+function checkTable(list) {
+  return `<table class="chk"><tbody>${list.map((c) => `<tr><th>${esc(c.k)}</th><td>${esc(c.v)}</td><td class="c s${c.s === "+" ? "p" : c.s === "-" ? "m" : "n"}">${MARKTXT[c.s]}</td></tr>`).join("")}</tbody></table>`;
 }
 
 function detail(h, r) {
-  const j = h.jockey_rec, s = h.sire_rec;
-  const pts = [...h.good.map((t) => `<li class="g">${esc(t)}</li>`), ...h.warn.map((t) => `<li class="w">${esc(t)}</li>`)].join("");
-  const runs = h.past.slice(0, 5).map((x) => `<tr><td class="nw">${esc(x.date.slice(2).replaceAll("-", "/"))}</td><td class="nw">${esc(x.venue)}</td>
+  const j = h.jockey_rec;
+  const list = checks(h, r, paceOf(r));
+  const rs = h.past.slice(0, 5).map((x) => `<tr><td class="nw">${esc(x.date.slice(2).replaceAll("-", "/"))}</td><td class="nw">${esc(x.venue)}</td>
       <td class="nw">${esc(short(x.name))}</td><td class="nw">${x.surface}${x.distance} ${esc(x.going ?? "")}</td>
       <td class="r nw">${x.field ?? ""}頭${x.pop ?? "-"}人</td><td class="c fin ${x.finish === 1 ? "f1" : ""}">${x.finish ?? esc(x.finish_raw ?? "")}</td>
       <td class="r nw ${x.l3rank === 1 ? "ai1" : ""}">${x.l3 ?? ""}${x.l3rank ? `(${x.l3rank})` : ""}</td><td class="nw">${esc(x.passing ?? "")}</td><td class="nw">${esc(x.jockey ?? "")}</td></tr>`).join("");
-  return `<div class="dgrid">
-    <div>${pts ? `<h4>見どころ・不安な点</h4><ul class="pts">${pts}</ul>` : ""}
-      ${h.p_ai != null ? `<h4 style="margin-top:8px">確率</h4><dl class="kv"><dt>${term("AI勝率")}</dt><dd>${pct(h.p_ai)}</dd>${h.p_sim != null ? `<dt>${term("シミュ", "シミュ勝率")}</dt><dd>${pct(h.p_sim)}</dd><dt>シミュ3着内率</dt><dd>${pct(h.p_sim_place)}</dd>` : ""}</dl>` : ""}
-    </div>
-    <div><h4>成績（1着-2着-3着-着外）</h4><dl class="kv">
+  return `<div class="dgrid wide">
+    <div><h4>チェック項目（＋は好材料、－は不安材料）</h4>${checkTable(list)}</div>
+    <div>
+      ${h.p_ai != null ? `<h4>確率</h4><dl class="kv"><dt>${term("AI勝率")}</dt><dd>${pct(h.p_ai)}</dd>${h.p_sim != null ? `<dt>${term("シミュ", "シミュ勝率")}</dt><dd>${pct(h.p_sim)}</dd><dt>シミュ3着内率</dt><dd>${pct(h.p_sim_place)}</dd>` : ""}</dl>` : ""}
+      <h4 style="margin-top:8px">成績（1着-2着-3着-着外）</h4><dl class="kv">
       <dt>全成績</dt><dd>${rec(h.records.all)}</dd>
-      <dt>${r.surface}・同じ距離帯</dt><dd>${rec(h.records.band)}</dd>
-      <dt>${esc(r.venue)}${r.surface}</dt><dd>${rec(h.records.course)}</dd>
-      <dt>${r.surface}・稍重〜不良</dt><dd>${rec(h.records.heavy)}</dd>
-      <dt>獲得賞金</dt><dd>${(h.prize ?? 0).toLocaleString()}万円</dd></dl></div>
-    <div><h4>血統・騎手</h4><dl class="kv">
+      <dt>獲得賞金</dt><dd>${(h.prize ?? 0).toLocaleString()}万円</dd>
       <dt>父</dt><dd>${esc(h.sire ?? "?")} ${lineTag(h.line)}</dd>
       <dt>母父</dt><dd>${esc(h.damsire ?? "?")}</dd>
-      <dt>父の産駒</dt><dd>${s ? `この条件で${s.n}走 ${term("3着内率")}${pct(s.top3, 0)}（平均${pct(s.base, 0)}）` : "この条件の出走が少なく集計なし"}</dd>
-      <dt>騎手</dt><dd>${esc(h.jockey ?? "未定")}${j ? `　直近1年 ${j.n}騎乗 3着内率${pct(j.top3, 0)}` : ""}</dd></dl></div>
+      <dt>厩舎</dt><dd>${esc(h.trainer ?? "")}${h.stable ? `（${esc(h.stable)}）` : ""}</dd></dl>
+    </div>
   </div>
-  ${runs ? `<div class="tw mini"><table><thead><tr><th>日付</th><th>場</th><th>レース</th><th>距離</th><th class="r">頭数/人気</th><th class="c">着</th><th class="r">${term("上がり")}</th><th>${term("通過")}</th><th>騎手</th></tr></thead><tbody>${runs}</tbody></table></div>` : `<p class="small sub" style="margin:8px 0 0">出走記録がありません。</p>`}`;
+  ${rs ? `<div class="tw mini"><table><thead><tr><th>日付</th><th>場</th><th>レース</th><th>距離</th><th class="r">頭数/人気</th><th class="c">着</th><th class="r">${term("上がり")}</th><th>${term("通過")}</th><th>騎手</th></tr></thead><tbody>${rs}</tbody></table></div>` : ""}`;
+}
+
+// --- 見どころ
+function trendFacts(r) {
+  const t = r.trends;
+  if (!t.runs) return [];
+  const best = (rows, min = 8) => rows.filter((x) => x.n >= min).sort((a, b) => b.top3 - a.top3)[0];
+  const bs = best(t.style);
+  const avg = (xs) => xs.reduce((s, x) => s + x.top3 * x.n, 0) / Math.max(1, xs.reduce((s, x) => s + x.n, 0));
+  const inner = avg(t.frame.filter((x) => x.key <= 4)), outer = avg(t.frame.filter((x) => x.key >= 5));
+  const p1 = t.popularity.find((x) => x.key === "1");
+  return [
+    bs && `${term("脚質")}は${bs.key}の3着内率がいちばん高い（${pct(bs.top3, 0)}）。`,
+    `内枠（1〜4枠）の3着内率は${pct(inner, 0)}、外枠（5〜8枠）は${pct(outer, 0)}。`,
+    p1 && `1番人気は${p1.n}回で${Math.round(p1.win * p1.n)}勝、3着内率${pct(p1.top3, 0)}。`,
+    t.winner_l3 && `勝ち馬の${term("上がり")}は平均${t.winner_l3}秒。`,
+  ].filter(Boolean);
+}
+
+function lookView(r) {
+  const pace = paceOf(r);
+  const rank = aiRank(r);
+  const mk = (h) => (rank.has(h.horse_id) && rank.get(h.horse_id) < 5 ? `<span class="${rank.get(h.horse_id) === 0 ? "ai1" : ""}">${AIMARK[rank.get(h.horse_id)]}</span>` : "");
+  const lineup = ["逃げ", "先行", "差し", "追込"].map((s) => `<tr><th>${s}</th><td>${r.horses.filter((h) => h.style === s).map((h) => `<span class="lu">${h.number ? `<span class="waku w${h.frame}">${h.number}</span> ` : ""}${esc(h.name)}${mk(h) ? " " + mk(h) : ""}</span>`).join("") || `<span class="sub">なし</span>`}</td></tr>`).join("");
+  const scored = r.horses.map((h) => {
+    const c = checks(h, r, pace);
+    return { h, plus: c.filter((x) => x.s === "+"), minus: c.filter((x) => x.s === "-") };
+  });
+  const order = (a, b) => (b.h.p_ai ?? 0) - (a.h.p_ai ?? 0) || (b.plus.length - b.minus.length) - (a.plus.length - a.minus.length) || (a.h.pop ?? 99) - (b.h.pop ?? 99);
+  const pick = scored.filter((x) => x.plus.length - x.minus.length >= 2).sort(order).slice(0, 5);
+  const shaky = scored.filter((x) => x.h.pop && x.h.pop <= 3 && x.minus.length >= 2);
+  const row = (x) => `<tr><td class="nw">${x.h.number ? `<span class="waku w${x.h.frame}">${x.h.number}</span> ` : ""}<b>${esc(x.h.name)}</b> ${mk(x.h)}
+      ${x.h.pop ? `<div class="hs">${x.h.pop}番人気</div>` : ""}${x.h.finish ? `<div class="hs">結果 ${x.h.finish}着</div>` : ""}</td>
+    <td class="small">${x.plus.map((c) => `<div><span class="sp">＋</span>${esc(c.k)}：${esc(c.v)}</div>`).join("")}${x.minus.map((c) => `<div><span class="sm">－</span>${esc(c.k)}：${esc(c.v)}</div>`).join("")}</td></tr>`;
+  const facts = trendFacts(r);
+  return `<section class="blk"><h3>展開の見立て：流れは${pace.label}</h3>
+      <p style="margin:0">${esc(pace.why)}</p>
+      <table class="lineup"><tbody>${lineup}</tbody></table>
+      <p class="small sub" style="margin:0">脚質は近5走で最初のコーナーを何番手で回ったかから判定しています。</p></section>
+    ${facts.length ? `<section class="blk"><h3>このコースの傾向（過去5年）</h3><ul class="facts">${facts.map((x) => `<li>${x}</li>`).join("")}</ul></section>` : ""}
+    <section class="blk"><h3>好材料が多い馬</h3>
+      ${pick.length ? `<div class="tw"><table class="picks"><tbody>${pick.map(row).join("")}</tbody></table></div>` : `<p class="sub" style="margin:0">好材料が目立つ馬はいません。</p>`}</section>
+    ${shaky.length ? `<section class="blk"><h3>人気でも不安材料がある馬</h3><div class="tw"><table class="picks"><tbody>${shaky.map(row).join("")}</tbody></table></div></section>` : ""}
+    <p class="small sub" style="margin:0">＋と－は、前走の内容・距離・コース・展開・末脚・間隔・騎手・斤量・馬体重・馬場・血統の11項目をデータで判定したものです。馬の行を押すと各馬の判定を出馬表で見られます。</p>`;
 }
 
 // --- 馬柱
@@ -273,7 +386,7 @@ function aiView(r) {
     <td class="r pc">${pct(h.p_sim)}</td><td class="r">${pct(h.p_sim_place, 0)}</td>
     <td class="pc small">${esc(h.good[0] ?? "")}${h.warn[0] ? `<div class="sub">${esc(h.warn[0])}</div>` : ""}</td></tr>`).join("");
   return `<div class="tw"><table><thead><tr><th class="c">印</th><th class="c">順</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th><th class="r">${term("AI勝率")}</th><th class="r pc">${term("シミュ", "シミュ勝率")}</th><th class="r">${term("3着内率")}</th><th class="pc">主な理由</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">3着内率はシミュレーションの値。印はAI勝率の上位5頭につけています。</p>`;
+    <p class="small sub" style="margin:0">3着内率はシミュレーションの値。印はAI勝率の上位5頭につけています。<a href="#about">計算方法</a></p>`;
 }
 
 // --- コースデータ
@@ -411,11 +524,24 @@ function aboutView() {
     ["芝 全4,642レース", "AI", "27.1%", "57.8%"], ["", "1番人気", "33.6%", "65.5%"],
     ["芝2400m以上 349レース", "シミュレーション", "28.4%", "64.5%"], ["", "AI", "30.9%", "65.9%"], ["", "1番人気", "39.5%", "70.2%"],
   ].map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td class="r">${x[2]}</td><td class="r">${x[3]}</td></tr>`).join("");
-  return `<h1 style="font-size:18px">AIの成績</h1>
-    <p class="small sub" style="margin:0">2024年1月以降のレースで、学習に使っていない期間のテスト結果です（2026年10月14日時点）。</p>
+  return `<h1 style="font-size:18px">AI勝率の仕組み</h1>
+    <div class="prose"><p>AI勝率は「このメンバーで何度も走ったら、その馬が何回に1回勝つか」の見積もりです。出走馬全員分を足すとちょうど100%になります。当日のオッズは使っていません。</p></div>
+    <h2 class="sec">計算の手順</h2>
+    <ol class="steps">
+      <li><b>馬ごとの能力値を出す</b><p>過去の各レースで、その馬の平均速度が同じレースの真ん中の馬より何%速かったかを測ります。同じレースの中で比べるので、コースや馬場、ペースの違いは打ち消されます。一緒に走った相手を通じて全馬をつないで計算するので、G1で勝ち馬に迫った馬はG1級として評価されます。新しいレースほど重く数え、距離が延びたときに能力が上がるか下がるかも一緒に出します。</p></li>
+      <li><b>21項目にまとめる</b><p>能力値と距離の向き不向き、前走と近5走の着順、近5走の人気（過去のレースのもの）、最初のコーナーでの位置、上がりの速さ、休養明けの日数、距離の延長・短縮、斤量と枠（出走馬の平均との差）、騎手の過去1年の3着内率、性別・年齢、出走数、獲得賞金、父と母父の産駒の長距離適性です。どれもそのレースより前のデータだけで計算しています。</p></li>
+      <li><b>点数にして確率に直す</b><p>21項目それぞれに重みをかけて足し、馬ごとの点数を出します。点数の差を出走馬の中で比べて確率に直します（点数が1上がると勝つ見込みが約2.7倍になる計算です）。重みは2018〜2022年のレースで、実際に勝った馬に高い確率がつくように決め、2023年のレースで調整しました。</p></li>
+      <li><b>シミュレーションで走らせる（菊花賞のみ）</b><p>長距離では展開やスタミナの影響が大きいので、点数から各馬の最高速度を、過去走から脚質・末脚・スタミナを決め、京都芝3000mのコースを数百回走らせます。勝った回数の割合が「シミュ勝率」、3着以内に入った割合が「3着内率」です。</p></li>
+    </ol>
+    <h2 class="sec">テストの成績</h2>
+    <p class="small sub" style="margin:0">学習に使っていない2024年1月以降のレースで、AIがいちばん高い勝率をつけた馬（本命）の成績です（2026年10月14日時点）。</p>
     <div class="tw"><table><thead><tr><th>対象</th><th>予想</th><th class="r">本命が1着</th><th class="r">本命が3着内</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="prose"><p>今のAIは、本命の的中率では1番人気に届いていません。オッズには大勢の予想が集まっているので、オッズを使わないモデルが人気より当てるのは簡単ではありません。</p>
-    <p>そのため、このサイトではAI勝率をオッズと並べ、AIが人気より高く評価している馬（${term("期待値")}が1を超える馬）を探す使い方を想定しています。</p></div>`;
+    <h2 class="sec">わかっている弱点</h2>
+    <div class="prose">
+      <p>本命の的中率は、まだ1番人気に届いていません。オッズには大勢の予想が集まっているので、オッズを使わないモデルが人気より当てるのは簡単ではありません。このサイトでは、AI勝率をオッズと並べて、AIが人気より高く見ている馬（${term("期待値")}が1を超える馬）を探す使い方を想定しています。</p>
+      <p>菊花賞は全馬が3000mを初めて走るので、距離適性は能力値の距離の向き不向きと血統からの推測です。</p>
+      <p>調教、パドック、当日の馬体重はまだ入っていません。枠順が決まる前の予想なので、枠は仮の値で計算しています。</p>
+    </div>`;
 }
 
 // ---------- popover ----------
