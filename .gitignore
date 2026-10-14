@@ -5,3 +5,4 @@ data/raw/
 data/keiba.sqlite*
 data/*.log
 data/*.pkl
+data/preds/
