@@ -77,6 +77,14 @@ python3 scripts/sim_backtest.py         # シミュレーターを調整・評�
 まだ市場のオッズには届いておらず、オッズと組み合わせても上積みはありません。本命の単勝を買い続けた場合の回収率は
 芝全体で88%、シミュレーターの本命（2400m以上）で67%です。
 
+## モデルの記録（`experiments/`）
+
+試したモデルの成績は [experiments/README.md](experiments/README.md) に1行ずつ残しています。
+
+```bash
+python3 scripts/experiment.py market linear_v1 gbdt_going   # 学習して記録表に追記
+```
+
 ## レースの予想（`scripts/predict.py`）
 
 ```bash

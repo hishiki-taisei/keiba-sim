@@ -11,6 +11,10 @@ import pandas as pd
 from . import pedigree
 from . import rating as rating_mod
 
+GOING = {"良": 0.0, "稍重": 1.0, "重": 2.0, "不良": 3.0}
+GOING_FEATURES = ["going_num", "heavy_apt", "heavy_x", "heavy_runs"]
+# Field-relative copies help tree models, which see one runner at a time.
+REL_FEATURES = ["pop5_rel", "jockey_rel", "y5_rel", "best_y3_rel", "fin5_rel", "early_pos5_rel"]
 FEATURES = ["rating", "slope", "unrated", "log_runs", "early_pos5", "kick5",
             "days_off", "last_fin", "fin5", "pop5", "earnings", "dist_change",
             "weight_rel", "gate_rel", "jockey", "female", "age", "last_y", "best_y3", "y5", "ped_long"]
@@ -37,6 +41,15 @@ def form(df: pd.DataFrame) -> pd.DataFrame:
     out["last_y"] = gy.shift()
     out["best_y3"] = gy.transform(lambda s: s.shift().rolling(3, min_periods=1).max())
     out["y5"] = gy.transform(lambda s: s.shift().rolling(5, min_periods=1).mean())
+    # Going: how the horse has run on rain-affected ground versus good ground.
+    wet = df["going"].map(GOING).fillna(0.0) >= 1.0
+    yy = y.fillna(0.0)
+    hid = df["horse_id"]
+    cum = lambda v: v.groupby(hid).cumsum() - v  # sum over previous runs only
+    sy_w, n_w = cum(yy.where(wet, 0.0)), cum(wet.astype(float))
+    sy_d, n_d = cum(yy.where(~wet, 0.0)), cum((~wet).astype(float))
+    out["heavy_apt"] = sy_w / (n_w + 3.0) - sy_d / (n_d + 3.0)
+    out["heavy_runs"] = np.log1p(n_w)
     out["runs_before"] = g.cumcount()
     return out
 
@@ -98,6 +111,10 @@ def build(df: pd.DataFrame, start: str = "2018-01", asof: pd.Timestamp | None = 
     out["pop5"] = out["pop5"].fillna(3.0)
     out["dist_change"] = out["dist_change"].fillna(0.0)
     out["female"] = (out["sex"] == "牝").astype(float)
+    out["going_num"] = out["going"].map(GOING).fillna(0.0)
+    out["heavy_x"] = out["heavy_apt"].fillna(0.0) * out["going_num"]
+    for c in ["pop5", "jockey", "y5", "best_y3", "fin5", "early_pos5"]:
+        out[c + "_rel"] = out[c] - out.groupby("race_id")[c].transform("mean")
     out["age"] = out["age"].clip(upper=7).astype(float)
     out["earnings"] = out["earnings"] - out.groupby("race_id")["earnings"].transform("mean")
     out["days_off"] = np.log1p(out["days_off"].fillna(180).clip(upper=720))
@@ -106,8 +123,9 @@ def build(df: pd.DataFrame, start: str = "2018-01", asof: pd.Timestamp | None = 
     return out
 
 
-def for_entries(df: pd.DataFrame, race: dict) -> pd.DataFrame:
-    """Features for an upcoming race. ``race`` is scraper.parse.entries() output."""
+def for_entries(df: pd.DataFrame, race: dict, going: str = "良") -> pd.DataFrame:
+    """Features for an upcoming race. ``race`` is scraper.parse.entries() output;
+    ``going`` is the expected ground (not known until race day)."""
     date = pd.Timestamp(race["date"])
     rows = pd.DataFrame(race["horses"])
     n = len(rows)
@@ -116,7 +134,7 @@ def for_entries(df: pd.DataFrame, race: dict) -> pd.DataFrame:
     rows = rows.assign(race_id=race["race_id"], date=date, surface=race["surface"],
                        distance=race["distance"], field=n, finish=np.nan, time_sec=np.nan,
                        odds=np.nan, prize=np.nan, speed=np.nan, early_pos=np.nan, kick_rel=np.nan,
-                       last3f=np.nan, passing=None, race_name=race["title"])
+                       last3f=np.nan, passing=None, race_name=race["title"], going=going)
     rows["number"] = rows["number"].astype(int)
     hist = df[df["date"] < date]
     all_ = pd.concat([hist, rows], ignore_index=True)
