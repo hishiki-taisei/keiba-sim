@@ -19,6 +19,15 @@ ROOT = Path(__file__).resolve().parent.parent
 LOG = ROOT / "experiments" / "log.csv"
 SIM_LOG = ROOT / "experiments" / "sim_log.csv"
 README = ROOT / "experiments" / "README.md"
+PREDS = ROOT / "data" / "preds"  # per-race test losses (not committed)
+
+
+def compare(a: str, b: str, surface: str = "芝") -> tuple[float, float]:
+    """Mean per-race log-loss difference (a - b) on the test races and its standard error."""
+    x = pd.read_pickle(PREDS / f"{surface}_{a}.pkl").set_index("race_id")["model"]
+    y = pd.read_pickle(PREDS / f"{surface}_{b}.pkl").set_index("race_id")["model"]
+    d = (x - y.reindex(x.index)).dropna()
+    return float(d.mean()), float(d.std() / np.sqrt(len(d)))
 
 
 def subsets(d: pd.DataFrame) -> dict:
@@ -55,6 +64,15 @@ def score(predict, valid: pd.DataFrame, test: pd.DataFrame) -> dict:
     row["test_value_bets"] = len(bets)
     row["test_value_roi"] = round(float(((bets["finish"] == 1) * bets["odds"]).sum() / max(len(bets), 1)), 4)
     row["blend_weight_model"] = round(float(blend.w[0] / blend.sd[0]), 3)
+    # Per-race log loss of the winner, so two runs can be compared race by race.
+    win = (t["finish"] == 1).to_numpy()
+    per = pd.DataFrame({"race_id": t["race_id"].to_numpy()[win],
+                        "model": -np.log(np.clip(np.asarray(predict(t))[win], 1e-6, 1)),
+                        "blend": -np.log(np.clip(pb[win], 1e-6, 1)),
+                        "market": -np.log(np.clip(mk[win], 1e-6, 1))})
+    d = per["blend"] - per["market"]
+    row["test_all_blend_diff_se"] = round(float(d.std() / np.sqrt(len(d))), 4)
+    row["_per_race"] = per
     for period, part in (("valid", valid), ("test", test)):
         for sub, d in subsets(part).items():
             if d.empty:
@@ -76,6 +94,9 @@ def record(name: str, description: str, predict, valid, test, surface: str = "�
     row = {"date": dt.date.today().isoformat(), "surface": surface, "name": name, "description": description,
            "commit": commit,
            **score(predict, valid, test)}
+    per = row.pop("_per_race")
+    PREDS.mkdir(parents=True, exist_ok=True)
+    per.to_pickle(PREDS / f"{surface}_{name}.pkl")
     LOG.parent.mkdir(exist_ok=True)
     log = pd.read_csv(LOG) if LOG.exists() else pd.DataFrame()
     if "surface" in log:
@@ -111,6 +132,7 @@ def write_readme(log: pd.DataFrame):
         "",
         "**オッズ＋モデル**：モデルの勝率と単勝オッズの勝率を、調整期間で決めた重みで混ぜたもの（Benter の2段階法）。"
         "「オッズ単独との差」がマイナスなら、モデルがオッズの知らない情報を持っているということです。"
+        "±は誤差の目安（標準誤差）で、差がこの2倍より大きければ偶然とは考えにくい差です。"
         "**期待値買い**：混ぜた勝率×オッズが1.2以上の馬（100倍超を除く）の単勝を買った回収率。確定オッズで計算しているので実際より甘めです。",
         "",
     ]
@@ -123,7 +145,9 @@ def write_readme(log: pd.DataFrame):
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for _, r in part.iterrows():
             bl, mk = r.get("test_all_blend_logloss"), r.get("test_all_market_logloss")
-            blend_cols = (f"| {bl:.4f} | {bl - mk:+.4f} | {pct(r['test_value_roi'])}（{int(r['test_value_bets'])}） |"
+            se = r.get("test_all_blend_diff_se")
+            pm = f" ±{se:.4f}" if pd.notna(se) else ""
+            blend_cols = (f"| {bl:.4f} | {bl - mk:+.4f}{pm} | {pct(r['test_value_roi'])}（{int(r['test_value_bets'])}） |"
                           if pd.notna(bl) and r["name"] != "market" else "| — | — | — |")
             lines.append(
                 f"| {r['date']} | {r['name']} | {r['description']} | {r['valid_all_logloss']:.4f} "

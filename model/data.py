@@ -24,10 +24,10 @@ def load_runs(db: Path = DB, surface: str | None = "芝") -> pd.DataFrame:
     con = sqlite3.connect(db)
     q = """
     SELECT r.race_id, ra.date, ra.venue, ra.surface, ra.distance, ra.course_note, ra.going,
-           ra.grade, ra.name AS race_name, ra.class_text, ra.n_runners,
+           ra.grade, ra.name AS race_name, ra.class_text, ra.n_runners, ra.laps,
            r.number, r.frame, r.finish, r.horse_id, r.horse_name, r.sex, r.age,
            r.weight_carried, r.jockey_id, r.trainer_id, r.time_sec, r.passing, r.last3f,
-           r.odds, r.popularity, r.body_weight, r.prize
+           r.odds, r.popularity, r.body_weight, r.body_weight_diff, r.prize
     FROM results r JOIN races ra USING(race_id)
     WHERE r.finish IS NOT NULL AND r.time_sec IS NOT NULL
     """

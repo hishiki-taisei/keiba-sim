@@ -34,7 +34,15 @@ EXPERIMENTS = {
                        ("gbdt", features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES)),
     "gbdt_offset": ("オッズを土台に、gbdt_going_rel と同じ項目でオッズとのズレだけを学ぶ勾配ブースティング",
                     ("gbdt_offset", features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES)),
+    "offset_v2": ("gbdt_offset ＋ 当日馬体重・調教師成績・過去走のペース・当日のトラックバイアス（12項目）",
+                  ("gbdt_offset", features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES + features.V2_FEATURES)),
 }
+_OFF = features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES
+for key, label, cols in [("bw", "当日馬体重（増減・出走馬平均との差・好走時との差）", ["bw_diff", "bw_rel", "bw_vs_best"]),
+                         ("trainer", "調教師の直近1年成績", ["trainer", "trainer_rel"]),
+                         ("pace", "過去走のペースと位置取りの有利不利", ["pace_favor5", "pace5"]),
+                         ("bias", "同じ日の先行・内枠バイアス", ["bias_front_x", "bias_inner_x", "bias_front", "bias_inner", "bias_n"])]:
+    EXPERIMENTS["offset_" + key] = (f"gbdt_offset ＋ {label}", ("gbdt_offset", _OFF + cols))
 
 
 def log_market(df):
