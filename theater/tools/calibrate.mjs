@@ -2,21 +2,30 @@
 //
 //   node theater/tools/calibrate.mjs theater/data/kikka2026.field.json theater/data/kikka2026.json
 //
-// Runs the field many times with fixed seeds (the same races every round, so
-// rounds differ only by the abilities), compares each horse's win rate with
-// its model probability, and nudges its ability by the log ratio. Post
-// positions are drawn at random each race unless the field has them.
-// Finishes with a check on fresh seeds and stores the result in the output.
+// Runs the field many times, compares each horse's win rate with its model
+// probability and nudges its ability by the log ratio; at the same time
+// scales the field's overall speed so the median winning time matches the
+// course's par time from past races. Early rounds reuse the same races (so
+// rounds differ only by the abilities), later ones use fresh races so the
+// abilities do not fit the noise of one set. Post positions are drawn at
+// random each race unless the field has them. Finishes with a check on
+// fresh races and stores the result in the output.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
-import { tally } from "../engine.js";
+import { tally, runRace } from "../engine.js";
 
 if (!isMainThread) {
   // worker: run one share of the races and send the tally back
   const { field, n, seed } = workerData;
-  parentPort.postMessage(tally(field, n, { seed }));
+  const res = tally(field, n, { seed });
+  res.times = [];                        // winning times of the first few races
+  for (let k = 0; k < Math.min(n, 60); k++) {
+    const r = runRace(field, { seed: seed + 31 * k + 7 });
+    res.times.push(r.time[r.order[0]]);
+  }
+  parentPort.postMessage(res);
   process.exit(0);
 }
 
@@ -32,7 +41,7 @@ async function tallyParallel(field, n, seed) {
     }).then(r => ({ r, m })));
   }
   const parts = await Promise.all(jobs);
-  const out = { n };
+  const out = { n, times: parts.flatMap(p => p.r.times).sort((a, b) => a - b) };
   for (const key of ["win", "place", "meanRank", "firstCorner", "lastCorner"]) {
     out[key] = field.horses.map((_, h) => parts.reduce((a, { r, m }) => a + r[key][h] * m, 0) / n);
   }
@@ -67,9 +76,14 @@ for (let round = 0; round < ROUNDS; round++) {
     h.ability += step * Math.log(target[i] / w);
     worst = Math.max(worst, Math.abs(res.win[i] - target[i]));
   });
+  // overall speed: median winning time to the course's par from past races
+  const par = field.pace?.par_time;
+  const simT = res.times[res.times.length >> 1];
+  if (par) field.speed_scale = (field.speed_scale ?? 1) * (simT / par) ** 0.9;
   const mean = field.horses.reduce((a, h) => a + h.ability, 0) / H;
   field.horses.forEach(h => { h.ability -= mean; });
-  console.log(`round ${round + 1}: largest gap ${(100 * worst).toFixed(2)} pt`);
+  console.log(`round ${round + 1}: largest gap ${(100 * worst).toFixed(2)} pt, median winning time ${simT.toFixed(1)}s` +
+              (par ? ` (par ${par}s, speed ×${field.speed_scale.toFixed(4)})` : ""));
 }
 
 // check on races the calibration never saw
@@ -87,6 +101,7 @@ console.log(`\nfresh ${2 * N} races: mean gap ${(100 * mae).toFixed(2)} pt, larg
 
 field.calibration = {
   races_per_round: N, rounds: ROUNDS, check_races: 2 * N,
+  median_win_time: Math.round(check.times[check.times.length >> 1] * 10) / 10, par_time: field.pace?.par_time ?? null,
   mean_gap: Math.round(mae * 1e4) / 1e4, largest_gap: Math.round(worst * 1e4) / 1e4,
   win: check.win.map(x => Math.round(x * 1e4) / 1e4),
   place: check.place.map(x => Math.round(x * 1e4) / 1e4),

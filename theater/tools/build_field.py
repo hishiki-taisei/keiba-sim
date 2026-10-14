@@ -81,7 +81,7 @@ def runs_of(con, name, date):
     return row[0], runs
 
 
-def features(runs):
+def features(runs, surface="芝"):
     w = [DECAY ** k for k in range(len(runs))]
     style_v, style_w, move_v, move_w, kick_v, kick_w = [], [], [], [], [], []
     perf = []
@@ -96,7 +96,7 @@ def features(runs):
             style_v.append((p[0] - 1) / (n - 1)); style_w.append(wk)
             if len(p) >= 2:
                 move_v.append((p[0] - p[-1]) / (n - 1)); move_w.append(wk)
-        if r["surface"] == "芝" and r["last3f"] and r["med3f"]:
+        if r["surface"] == surface and r["last3f"] and r["med3f"]:
             kick_v.append(r["med3f"] - r["last3f"]); kick_w.append(wk)
 
     def split(cond):
@@ -145,6 +145,7 @@ def course_pace(con, venue, surface, distance, outer, before, graded=False):
     early, pre, last = sections(distance)
     marks = [0, early, pre, last, distance]
     speeds = [[] for _ in range(4)]
+    times = []
     for (laps,) in rows:
         try:
             lap = [float(x) for x in laps.split(" - ")]
@@ -152,6 +153,7 @@ def course_pace(con, venue, surface, distance, outer, before, graded=False):
             continue
         if abs(sum(lap)) < 1 or len(lap) < 3:
             continue
+        times.append(sum(lap))
         # cumulative distance at the end of each lap: the first lap is short
         first = distance - 200 * (len(lap) - 1)
         ends = [first + 200 * k for k in range(len(lap))]
@@ -177,7 +179,7 @@ def course_pace(con, venue, surface, distance, outer, before, graded=False):
     early_v, mid_v, pre_v, last_v = (med(x) for x in speeds)
     mid_v = mid_v or (early_v + pre_v) / 2
     return {"early": round(early_v, 3), "mid": round(mid_v, 3), "pre": round(pre_v, 3),
-            "last600": round(last_v, 3)}, len(rows)
+            "last600": round(last_v, 3), "par_time": round(med(times), 2)}, len(rows)
 
 
 def past_runnings(con, race_name, venue):
@@ -265,7 +267,7 @@ def main():
     for e in entries:
         hid, runs = runs_of(con, e["name"], a.date)
         h = {"name": e["name"], "jockey": e["jockey"], "gate": e["gate"], "p_model": round(e["p"] / total, 4),
-             "horse_id": hid, **(features(runs) if runs else {})}
+             "horse_id": hid, **(features(runs, a.surface) if runs else {})}
         if "actual" in e:
             h["actual"] = e["actual"]
         h["recent"] = [{"date": r["date"], "race": r["race"], "distance": r["distance"], "going": r["going"],

@@ -138,7 +138,10 @@ export function runRace(field, opts = {}) {
     }
   }
 
-  const pace = (opts.pace && opts.pace !== "auto" ? PACE[opts.pace] : 1 + 0.012 * normal(rand)) * goingSpeed;
+  // field.speed_scale is set by calibration so the median winning time
+  // matches past races on the course
+  const scale = field.speed_scale ?? 1;
+  const pace = (opts.pace && opts.pace !== "auto" ? PACE[opts.pace] : 1 + 0.012 * normal(rand)) * goingSpeed * scale;
 
   // per-horse, per-race draws
   const cap = new Float64Array(H), want = new Float64Array(H), spurtAt = new Float64Array(H),
@@ -146,7 +149,7 @@ export function runRace(field, opts = {}) {
   for (let i = 0; i < H; i++) {
     const h = horses[i];
     const form = 0.16 * (h.form_sd ?? 1) * normal(rand);
-    cap[i] = (prof.cap + (h.ability ?? 0) + 0.12 * goingWeight * (h.going ?? 0) + form) * goingSpeed;
+    cap[i] = (prof.cap * scale + (h.ability ?? 0) + 0.12 * goingWeight * (h.going ?? 0) + form) * goingSpeed;
     want[i] = clamp((h.style ?? 0.5) + 0.08 * normal(rand), 0, 1);
     const move = h.move ?? 0, stam = h.stamina ?? 0;
     moveAt[i] = Math.min(900, 0.45 * D) + 250 * longish * move + 80 * normal(rand);
@@ -173,7 +176,8 @@ export function runRace(field, opts = {}) {
   const rank = new Int16Array(H);
   let t = 0, finished = 0;
 
-  while (finished < H && t < 400) {
+  let after = opts.trace ? 4 : 0;   // seconds of galloping out shown after the last horse finishes
+  while ((finished < H || (after -= DT) > 0) && t < 420) {
     for (let a = 1; a < H; a++) {             // insertion sort: the order barely changes per step
       const x = idx[a], sx = s[x];
       let b = a - 1;
@@ -193,7 +197,11 @@ export function runRace(field, opts = {}) {
 
     for (let r = 0; r < H; r++) {
       const i = idx[r];
-      if (done[i]) continue;
+      if (done[i]) {               // past the post: ease down, out of everyone's way
+        v[i] = Math.max(4, v[i] - 1.2 * DT);
+        s[i] += v[i] * DT;
+        continue;
+      }
       const rem = D - s[i];
       const m = s[i] | 0, grade = tab.grade[m];
       const straight = tab.home[m] === 1 && rem < 600;
@@ -212,7 +220,7 @@ export function runRace(field, opts = {}) {
           gapWant *= 1 - f * clamp(0.8 + 0.25 * move, 0.3, 0.95);
         }
         const push = s[i] < 700 ? 1.0 : rem < moveAt[i] ? 0.7 : 0.35;
-        target += clamp((rem < moveAt[i] ? 0.12 : 0.07) * (leadS - s[i] - gapWant), -0.5, push);
+        target += clamp((rem < moveAt[i] ? 0.12 : 0.07) * (leadS - s[i] - gapWant), s[i] < 700 ? -1.2 : -0.5, push);
       }
       target = Math.min(target, cap[i] + kickV[i]);
       target -= 22 * grade;
@@ -233,6 +241,8 @@ export function runRace(field, opts = {}) {
       }
       const held = block >= 0 && gapAhead < LENGTH && v[block] < target;
       if (held) target = Math.min(target, v[block] + 0.1 * (gapAhead - 1.2));
+      // well beaten in the straight: the jockey stops asking
+      if (rem < 400 && leadS - s[i] > 8) target -= Math.min(2.0 * longish, 0.08 * (leadS - s[i] - 8));
 
       // lateral movement
       let dy = 0;
@@ -260,8 +270,8 @@ export function runRace(field, opts = {}) {
       if (ns >= D) {
         tFin[i] = t + (D - s[i]) / step * DT;
         done[i] = 1; finished++;
-        s[i] = D;
-      } else s[i] = ns;
+      }
+      s[i] = ns;
     }
     t += DT;
     if (trace) {
@@ -275,7 +285,7 @@ export function runRace(field, opts = {}) {
   return {
     order, time: Array.from(tFin), last3f: Array.from(tFin, (x, i) => x - t600[i]),
     corners: corners.map(c => Array.from(c)), cornerNames: checks.map(c => c.corner),
-    splits, gates, pace, trace, course,
+    splits, gates, pace, goingSpeed, trace, course,
   };
 }
 
