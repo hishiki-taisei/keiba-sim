@@ -17,8 +17,11 @@ N_BINS = 32
 
 
 class GBDT:
-    def __init__(self, feats, rounds=400, lr=0.05, depth=4, lam=1.0, min_hess=20.0, seed=0):
+    def __init__(self, feats, rounds=400, lr=0.05, depth=4, lam=1.0, min_hess=20.0, seed=0, base=None):
+        """``base``: optional function df -> starting score (e.g. log market probability), so the
+        trees learn only the correction on top of it."""
         self.feats, self.rounds, self.lr, self.depth = feats, rounds, lr, depth
+        self.base = base
         self.lam, self.min_hess = lam, min_hess
         self.rng = np.random.default_rng(seed)
 
@@ -81,12 +84,12 @@ class GBDT:
         B = self._bin(X)
         r = pd.factorize(train["race_id"])[0]
         y = (train["finish"].to_numpy() == 1).astype(float)
-        score = np.zeros(len(B))
+        score = self._base(train)
         if valid is not None:
             Bv = self._bin(valid[self.feats].to_numpy(float))
             rv = pd.factorize(valid["race_id"])[0]
             yv = valid["finish"].to_numpy() == 1
-            sv = np.zeros(len(Bv))
+            sv = self._base(valid)
         self.trees, best, best_i = [], np.inf, 0
         self.history = []
         for i in range(self.rounds):
@@ -109,9 +112,12 @@ class GBDT:
             self.trees = self.trees[: best_i + 1]
         return self
 
+    def _base(self, df):
+        return np.asarray(self.base(df), dtype=float) if self.base is not None else np.zeros(len(df))
+
     def score(self, df):
         B = self._bin(df[self.feats].to_numpy(float))
-        return sum(self._apply(t, B) for t in self.trees)
+        return self._base(df) + sum(self._apply(t, B) for t in self.trees)
 
     def predict(self, df):
         return softmax_by_race(self.score(df), pd.factorize(df["race_id"])[0])

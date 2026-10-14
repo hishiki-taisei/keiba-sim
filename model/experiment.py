@@ -27,8 +27,34 @@ def subsets(d: pd.DataFrame) -> dict:
     return {"all": d, "long": d[long_], "kikka_like": d[kikka_like]}
 
 
+def _blend(predict, valid, test):
+    """Benter's second stage: softmax(a*log p_model + b*log p_market), weights fit on the valid year."""
+    from .logit import Logit
+    parts = []
+    for d in (valid, test):
+        parts.append(d.assign(lm=np.log(np.clip(predict(d), 1e-6, 1)),
+                              lk=np.log(np.clip(evaluate.market_probs(d), 1e-6, 1))))
+    b = Logit(["lm", "lk"], l2=0.0).fit(parts[0], iters=800)
+    return b, parts[1]
+
+
 def score(predict, valid: pd.DataFrame, test: pd.DataFrame) -> dict:
     row = {}
+    blend, t = _blend(predict, valid, test)
+    pb = blend.predict(t)
+    mk = evaluate.market_probs(t)
+    for sub, d in subsets(t).items():
+        if d.empty:
+            continue
+        idx = t.index.get_indexer(d.index)
+        row[f"test_{sub}_blend_logloss"] = round(evaluate.metrics(d, pb[idx])["logloss"], 4)
+        row[f"test_{sub}_market_logloss"] = round(evaluate.metrics(d, mk[idx])["logloss"], 4)
+    # Value bets on the blend: p * odds >= 1.2, longshots over 100x left out (final odds, so optimistic).
+    v = t.assign(p=pb)
+    bets = v[(v["p"] * v["odds"] >= 1.2) & (v["odds"] < 100)]
+    row["test_value_bets"] = len(bets)
+    row["test_value_roi"] = round(float(((bets["finish"] == 1) * bets["odds"]).sum() / max(len(bets), 1)), 4)
+    row["blend_weight_model"] = round(float(blend.w[0] / blend.sd[0]), 3)
     for period, part in (("valid", valid), ("test", test)):
         for sub, d in subsets(part).items():
             if d.empty:
@@ -83,20 +109,28 @@ def write_readme(log: pd.DataFrame):
         "「本命」はモデルがいちばん勝率が高いと出した馬です。菊花賞型は「3歳・芝2400m以上・9〜11月」。",
         "勾配ブースティング（gbdt）は調整期間で学習の止めどころを決めているので、比べるときはテストの列を見てください。",
         "",
+        "**オッズ＋モデル**：モデルの勝率と単勝オッズの勝率を、調整期間で決めた重みで混ぜたもの（Benter の2段階法）。"
+        "「オッズ単独との差」がマイナスなら、モデルがオッズの知らない情報を持っているということです。"
+        "**期待値買い**：混ぜた勝率×オッズが1.2以上の馬（100倍超を除く）の単勝を買った回収率。確定オッズで計算しているので実際より甘めです。",
+        "",
     ]
     log = log.assign(surface=log["surface"].fillna("芝") if "surface" in log else "芝")
     for surface, part in log.groupby("surface", sort=False):
         lines += ["", f"## {surface}", "",
                   "| 日付 | モデル | 内容 | 調整 対数損失 | テスト 対数損失 | テスト 本命勝率 | テスト 本命3着内 "
-                  "| 長距離 対数損失 | 長距離 本命勝率 | 菊花賞型 本命勝率 | 菊花賞型 本命3着内 |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|"]
+                  "| 長距離 対数損失 | 長距離 本命勝率 | 菊花賞型 本命勝率 | オッズ＋モデル 対数損失 | オッズ単独との差 "
+                  "| 期待値買い 回収率（点数） |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for _, r in part.iterrows():
+            bl, mk = r.get("test_all_blend_logloss"), r.get("test_all_market_logloss")
+            blend_cols = (f"| {bl:.4f} | {bl - mk:+.4f} | {pct(r['test_value_roi'])}（{int(r['test_value_bets'])}） |"
+                          if pd.notna(bl) and r["name"] != "market" else "| — | — | — |")
             lines.append(
                 f"| {r['date']} | {r['name']} | {r['description']} | {r['valid_all_logloss']:.4f} "
                 f"| {r['test_all_logloss']:.4f} | {pct(r['test_all_win'])} | {pct(r['test_all_top3'])} "
                 f"| {r['test_long_logloss']:.4f} | {pct(r['test_long_win'])} "
-                + (f"| {pct(r.get('test_kikka_like_win'))} | {pct(r.get('test_kikka_like_top3'))} |"
-                   if surface == "芝" else "| — | — |"))
+                + (f"| {pct(r.get('test_kikka_like_win'))} " if surface == "芝" else "| — ")
+                + blend_cols)
         n = part.iloc[-1]
         kl = n.get("test_kikka_like_races")
         lines += ["", f"テストのレース数：全体 {int(n['test_all_races'])}、長距離（2200m以上） {int(n['test_long_races'])}"

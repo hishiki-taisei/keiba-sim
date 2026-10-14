@@ -32,7 +32,13 @@ EXPERIMENTS = {
     "gbdt_going": ("gbdt ＋ 馬場状態", ("gbdt", features.FEATURES + features.GOING_FEATURES)),
     "gbdt_going_rel": ("gbdt_going ＋ 出走馬の平均との差（人気・騎手・指数など6項目）",
                        ("gbdt", features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES)),
+    "gbdt_offset": ("オッズを土台に、gbdt_going_rel と同じ項目でオッズとのズレだけを学ぶ勾配ブースティング",
+                    ("gbdt_offset", features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES)),
 }
+
+
+def log_market(df):
+    return np.log(np.clip(evaluate.market_probs(df), 1e-6, 1.0))
 
 
 def main(names):
@@ -51,7 +57,8 @@ def main(names):
         elif spec[0] == "logit":
             predict = Logit(spec[1]).fit(train).predict
         else:
-            m = GBDT(spec[1], rounds=800, lr=0.05, depth=4).fit(train, valid)
+            base = log_market if spec[0] == "gbdt_offset" else None
+            m = GBDT(spec[1], rounds=800, lr=0.05, depth=4, base=base).fit(train, valid)
             print(name, "trees", len(m.trees), "importance", m.importance())
             predict = m.predict
         row = experiment.record(name, desc, predict, valid, test, surface=SURFACE)
