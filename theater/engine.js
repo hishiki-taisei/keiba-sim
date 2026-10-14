@@ -31,6 +31,10 @@ const SPREAD = 1.5;          // metres between preferred positions of neighbours
 const KICK_GAIN = 0.22;      // m/s of spurt per second of last-600m edge
 const START_LOSS = 1.35;     // seconds the engine's standing start costs
 const BUDGET_RATIO = 1.027;   // energy budget over the cost of running the par profile
+const EARLY_IN = 1.8;        // m/s sideways toward the rail after the start, while there is room
+// how much a horse's speed swings from one race to the next (m/s, times
+// form_sd); set so the distance from winner to last matches past races
+const FORM = { "芝": 0.22, "ダ": 0.36 };
 const GOING = {              // overall speed, and how much going aptitude counts
   "芝": { "良": [1.0, 0.0], "稍重": [0.992, 0.4], "重": [0.982, 0.8], "不良": [0.958, 1.0] },
   "ダ": { "良": [1.0, 0.0], "稍重": [1.003, 0.4], "重": [1.006, 0.8], "不良": [1.008, 1.0] },
@@ -148,7 +152,7 @@ export function runRace(field, opts = {}) {
     moveAt = new Float64Array(H), kickV = new Float64Array(H), e0 = new Float64Array(H);
   for (let i = 0; i < H; i++) {
     const h = horses[i];
-    const form = 0.16 * (h.form_sd ?? 1) * normal(rand);
+    const form = (FORM[surface] ?? 0.22) * (h.form_sd ?? 1) * normal(rand);
     cap[i] = (prof.cap * scale + (h.ability ?? 0) + 0.12 * goingWeight * (h.going ?? 0) + form) * goingSpeed;
     want[i] = clamp((h.style ?? 0.5) + 0.08 * normal(rand), 0, 1);
     const move = h.move ?? 0, stam = h.stamina ?? 0;
@@ -208,7 +212,8 @@ export function runRace(field, opts = {}) {
 
       // where it wants to be: a gap behind the leader set by its style,
       // closed up from moveAt by horses that like to make ground
-      let target = pace * prof.at(s[i]);
+      const cruise = pace * prof.at(s[i]);
+      let target = cruise;
       const spurting = rem < spurtAt[i];
       if (spurting) {
         target = cap[i] + kickV[i];
@@ -222,7 +227,10 @@ export function runRace(field, opts = {}) {
         const push = s[i] < 700 ? 1.0 : rem < moveAt[i] ? 0.7 : 0.35;
         target += clamp((rem < moveAt[i] ? 0.12 : 0.07) * (leadS - s[i] - gapWant), s[i] < 700 ? -1.2 : -0.5, push);
       }
-      target = Math.min(target, cap[i] + kickV[i]);
+      // top speed; before the spurt a horse can still go a little above the
+      // race's pace to take its position (early pace on dirt sprints is
+      // faster than the closing speed)
+      target = Math.min(target, spurting ? cap[i] + kickV[i] : Math.max(cap[i] + kickV[i], cruise + 0.8));
       target -= 22 * grade;
 
       // an empty tank caps the speed
@@ -241,8 +249,10 @@ export function runRace(field, opts = {}) {
       }
       const held = block >= 0 && gapAhead < LENGTH && v[block] < target;
       if (held) target = Math.min(target, v[block] + 0.1 * (gapAhead - 1.2));
-      // well beaten in the straight: the jockey stops asking
-      if (rem < 400 && leadS - s[i] > 8) target -= Math.min(2.0 * longish, 0.08 * (leadS - s[i] - 8));
+      // well out of the first five in the straight: the jockey stops asking
+      // (those still in the first five keep riding, however far the winner is)
+      const fifth = s[idx[Math.min(4, H - 1)]];
+      if (rem < 400 && fifth - s[i] > 8) target -= Math.min(2.0 * longish, 0.08 * (fifth - s[i] - 8));
 
       // lateral movement
       let dy = 0;
@@ -251,7 +261,9 @@ export function runRace(field, opts = {}) {
         const out = roomAt(i, y[i] + LANE, s, y, idx, r), inside = y[i] >= LANE && roomAt(i, y[i] - LANE, s, y, idx, r);
         if (out) dy = 1.4; else if (inside) dy = -1.4;
       } else if (!straight) {
-        if (y[i] > 0.05 && roomAt(i, y[i] - LANE * 0.6, s, y, idx, r)) dy = -(t < 20 ? 0.7 : 0.25);
+        // early on, everyone angles in toward the rail while there is room;
+        // later only a slow drift back in
+        if (y[i] > 0.05 && roomAt(i, y[i] - LANE * 0.6, s, y, idx, r)) dy = -(t < 25 ? (tab.bend[m] ? 1.2 : EARLY_IN) : 0.25);
       }
       y[i] = clamp(y[i] + dy * DT, 0, course.width - 2);
 
@@ -320,24 +332,39 @@ function roomAt(i, yy, s, y, idx, r) {
 export function tally(field, n, opts = {}) {
   const H = field.horses.length;
   const win = new Float64Array(H), place = new Float64Array(H), rankSum = new Float64Array(H),
-    c4 = new Float64Array(H), c1 = new Float64Array(H);
+    c4 = new Float64Array(H), c1 = new Float64Array(H), l3 = new Float64Array(H), behind = new Float64Array(H);
+  const winTimes = [];
   const seed0 = opts.seed ?? 1000;
   const course = courseOf(field);
   for (let k = 0; k < n; k++) {
     const res = runRace(field, { ...opts, course, seed: seed0 + k * 7919, trace: false });
+    const t0 = res.time[res.order[0]];
+    winTimes.push(t0);
     res.order.forEach((h, pos) => {
       if (pos === 0) win[h]++;
       if (pos < 3) place[h]++;
       rankSum[h] += pos + 1;
+      l3[h] += res.last3f[h];
+      behind[h] += res.time[h] - t0;
     });
     const nc = res.corners.length;
     for (let h = 0; h < H; h++) { c1[h] += res.corners[0][h]; c4[h] += res.corners[nc - 1][h]; }
   }
+  const avg = a => Array.from(a, x => x / n);
   return {
-    n, win: Array.from(win, x => x / n), place: Array.from(place, x => x / n),
-    meanRank: Array.from(rankSum, x => x / n),
-    firstCorner: Array.from(c1, x => x / n), lastCorner: Array.from(c4, x => x / n),
+    n, win: avg(win), place: avg(place), meanRank: avg(rankSum), firstCorner: avg(c1), lastCorner: avg(c4),
+    last3f: avg(l3), behind: avg(behind), winTimes,
   };
+}
+
+export const TALLY_KEYS = ["win", "place", "meanRank", "firstCorner", "lastCorner", "last3f", "behind"];
+
+// Combine tallies of separate batches of races into one.
+export function mergeTallies(parts) {
+  const n = parts.reduce((a, p) => a + p.n, 0), H = parts[0].win.length;
+  const out = { n, winTimes: parts.flatMap(p => p.winTimes).sort((a, b) => a - b) };
+  for (const key of TALLY_KEYS) out[key] = Array.from({ length: H }, (_, h) => parts.reduce((a, p) => a + p[key][h] * p.n, 0) / n);
+  return out;
 }
 
 // Same as tally but yields to the browser between chunks.
@@ -349,10 +376,5 @@ export async function tallyAsync(field, n, opts = {}, onProgress) {
     onProgress?.(k + m, n);
     await new Promise(r => setTimeout(r, 0));
   }
-  const H = field.horses.length, keys = ["win", "place", "meanRank", "firstCorner", "lastCorner"];
-  const out = { n };
-  for (const key of keys) {
-    out[key] = Array.from({ length: H }, (_, h) => parts.reduce((a, p) => a + p[key][h] * p.n, 0) / n);
-  }
-  return out;
+  return mergeTallies(parts);
 }

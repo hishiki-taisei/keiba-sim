@@ -210,10 +210,11 @@ def entries_from_csv(path, column):
 
 def entries_from_race(con, race_id):
     """A finished race's runners; win probabilities from the final odds."""
-    rows = con.execute("SELECT horse_name, jockey_name, number, odds, finish FROM results "
+    rows = con.execute("SELECT horse_name, jockey_name, number, odds, finish, passing, last3f, time_sec FROM results "
                        "WHERE race_id = ? ORDER BY number", (race_id,)).fetchall()
-    return [{"name": n, "jockey": j or "", "gate": g, "p": 0.8 / o if o else 0.001, "actual": f}
-            for n, j, g, o, f in rows if f is not None]
+    return [{"name": n, "jockey": j or "", "gate": g, "p": 0.8 / o if o else 0.001,
+             "actual": {"finish": f, "passing": pa, "last3f": l3, "time": t}}
+            for n, j, g, o, f, pa, l3, t in rows if f is not None]
 
 
 def main():

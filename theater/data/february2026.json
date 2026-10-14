@@ -37,7 +37,12 @@
    "form_sd": 0.718,
    "n_long": 0,
    "n_soft": 1,
-   "actual": 5,
+   "actual": {
+    "finish": 5,
+    "passing": "4-4",
+    "last3f": 36.7,
+    "time": 96.2
+   },
    "recent": [
     {
      "date": "2026-02-01",
@@ -90,7 +95,7 @@
      "last3f": 38.4
     }
    ],
-   "ability": -0.017
+   "ability": 0.009
   },
   {
    "name": "ハッピーマン",
@@ -106,7 +111,12 @@
    "form_sd": 1.297,
    "n_long": 0,
    "n_soft": 0,
-   "actual": 16,
+   "actual": {
+    "finish": 16,
+    "passing": "4-5",
+    "last3f": 39.5,
+    "time": 99.1
+   },
    "recent": [
     {
      "date": "2025-11-30",
@@ -149,7 +159,7 @@
      "last3f": 36.8
     }
    ],
-   "ability": -0.333
+   "ability": -0.643
   },
   {
    "name": "ブライアンセンス",
@@ -165,7 +175,12 @@
    "form_sd": 0.698,
    "n_long": 0,
    "n_soft": 5,
-   "actual": 4,
+   "actual": {
+    "finish": 4,
+    "passing": "10-9",
+    "last3f": 35.6,
+    "time": 95.7
+   },
    "recent": [
     {
      "date": "2026-01-25",
@@ -218,7 +233,7 @@
      "last3f": 37
     }
    ],
-   "ability": -0.078
+   "ability": -0.057
   },
   {
    "name": "ペリエール",
@@ -234,7 +249,12 @@
    "form_sd": 0.986,
    "n_long": 0,
    "n_soft": 5,
-   "actual": 10,
+   "actual": {
+    "finish": 10,
+    "passing": "7-7",
+    "last3f": 36.8,
+    "time": 96.6
+   },
    "recent": [
     {
      "date": "2025-12-07",
@@ -287,7 +307,7 @@
      "last3f": 36.2
     }
    ],
-   "ability": -0.075
+   "ability": -0.128
   },
   {
    "name": "シックスペンス",
@@ -303,7 +323,12 @@
    "form_sd": 1.032,
    "n_long": 1,
    "n_soft": 0,
-   "actual": 9,
+   "actual": {
+    "finish": 9,
+    "passing": "1-1",
+    "last3f": 37.2,
+    "time": 96.4
+   },
    "recent": [
     {
      "date": "2025-12-07",
@@ -356,7 +381,7 @@
      "last3f": 33.3
     }
    ],
-   "ability": 0.058
+   "ability": 0.119
   },
   {
    "name": "ラムジェット",
@@ -372,7 +397,12 @@
    "form_sd": 0.636,
    "n_long": 0,
    "n_soft": 3,
-   "actual": 8,
+   "actual": {
+    "finish": 8,
+    "passing": "15-15",
+    "last3f": 35.7,
+    "time": 96.3
+   },
    "recent": [
     {
      "date": "2025-12-07",
@@ -425,7 +455,7 @@
      "last3f": 36.5
     }
    ],
-   "ability": 0.017
+   "ability": 0.211
   },
   {
    "name": "ロングラン",
@@ -441,7 +471,12 @@
    "form_sd": 1.124,
    "n_long": 0,
    "n_soft": 0,
-   "actual": 14,
+   "actual": {
+    "finish": 14,
+    "passing": "13-13",
+    "last3f": 37.4,
+    "time": 97.8
+   },
    "recent": [
     {
      "date": "2025-11-23",
@@ -494,7 +529,7 @@
      "last3f": 34
     }
    ],
-   "ability": -0.117
+   "ability": -0.321
   },
   {
    "name": "サクラトゥジュール",
@@ -510,7 +545,12 @@
    "form_sd": 1.121,
    "n_long": 0,
    "n_soft": 0,
-   "actual": 13,
+   "actual": {
+    "finish": 13,
+    "passing": "10-9",
+    "last3f": 37.6,
+    "time": 97.7
+   },
    "recent": [
     {
      "date": "2026-02-10",
@@ -563,7 +603,7 @@
      "last3f": 34
     }
    ],
-   "ability": -0.026
+   "ability": -0.185
   },
   {
    "name": "ダブルハートボンド",
@@ -579,7 +619,12 @@
    "form_sd": 0.6,
    "n_long": 0,
    "n_soft": 2,
-   "actual": 3,
+   "actual": {
+    "finish": 3,
+    "passing": "6-5",
+    "last3f": 36,
+    "time": 95.6
+   },
    "recent": [
     {
      "date": "2025-12-07",
@@ -632,7 +677,7 @@
      "last3f": 36.9
     }
    ],
-   "ability": 0.198
+   "ability": 0.589
   },
   {
    "name": "ロードクロンヌ",
@@ -648,7 +693,12 @@
    "form_sd": 0.6,
    "n_long": 0,
    "n_soft": 6,
-   "actual": 11,
+   "actual": {
+    "finish": 11,
+    "passing": "2-2",
+    "last3f": 37.5,
+    "time": 96.7
+   },
    "recent": [
     {
      "date": "2026-01-25",
@@ -701,7 +751,7 @@
      "last3f": 38.4
     }
    ],
-   "ability": 0.022
+   "ability": 0.24
   },
   {
    "name": "サンライズホーク",
@@ -717,7 +767,12 @@
    "form_sd": 1.236,
    "n_long": 0,
    "n_soft": 2,
-   "actual": 12,
+   "actual": {
+    "finish": 12,
+    "passing": "15-15",
+    "last3f": 36.5,
+    "time": 97.2
+   },
    "recent": [
     {
      "date": "2026-02-15",
@@ -770,7 +825,7 @@
      "last3f": 36.7
     }
    ],
-   "ability": -0.169
+   "ability": -0.51
   },
   {
    "name": "コスタノヴァ",
@@ -786,7 +841,12 @@
    "form_sd": 0.6,
    "n_long": 0,
    "n_soft": 2,
-   "actual": 1,
+   "actual": {
+    "finish": 1,
+    "passing": "10-12",
+    "last3f": 35.2,
+    "time": 95.4
+   },
    "recent": [
     {
      "date": "2025-11-15",
@@ -839,7 +899,7 @@
      "last3f": 36.5
     }
    ],
-   "ability": 0.272
+   "ability": 0.486
   },
   {
    "name": "ナチュラルライズ",
@@ -855,7 +915,12 @@
    "form_sd": 1,
    "n_long": 0,
    "n_soft": 1,
-   "actual": 7,
+   "actual": {
+    "finish": 7,
+    "passing": "13-13",
+    "last3f": 35.7,
+    "time": 96.2
+   },
    "recent": [
     {
      "date": "2024-11-23",
@@ -878,7 +943,7 @@
      "last3f": 36.9
     }
    ],
-   "ability": -0.115
+   "ability": -0.149
   },
   {
    "name": "ウィルソンテソーロ",
@@ -894,7 +959,12 @@
    "form_sd": 0.6,
    "n_long": 0,
    "n_soft": 2,
-   "actual": 2,
+   "actual": {
+    "finish": 2,
+    "passing": "7-7",
+    "last3f": 35.7,
+    "time": 95.5
+   },
    "recent": [
     {
      "date": "2025-12-07",
@@ -947,7 +1017,7 @@
      "last3f": 37.1
     }
    ],
-   "ability": 0.228
+   "ability": 0.329
   },
   {
    "name": "ペプチドナイル",
@@ -963,7 +1033,12 @@
    "form_sd": 0.841,
    "n_long": 0,
    "n_soft": 1,
-   "actual": 6,
+   "actual": {
+    "finish": 6,
+    "passing": "3-2",
+    "last3f": 36.9,
+    "time": 96.2
+   },
    "recent": [
     {
      "date": "2025-12-07",
@@ -1016,7 +1091,7 @@
      "last3f": 37.5
     }
    ],
-   "ability": 0.06
+   "ability": 0.097
   },
   {
    "name": "サイモンザナドゥ",
@@ -1032,7 +1107,12 @@
    "form_sd": 0.794,
    "n_long": 0,
    "n_soft": 2,
-   "actual": 15,
+   "actual": {
+    "finish": 15,
+    "passing": "7-9",
+    "last3f": 37.8,
+    "time": 97.8
+   },
    "recent": [
     {
      "date": "2026-01-25",
@@ -1085,53 +1165,53 @@
      "last3f": 36.2
     }
    ],
-   "ability": 0.076
+   "ability": -0.088
   }
  ],
- "speed_scale": 1.0140044200755283,
+ "speed_scale": 0.9897647248381195,
  "calibration": {
-  "races_per_round": 2000,
+  "races_per_round": 4000,
   "rounds": 16,
-  "check_races": 4000,
+  "check_races": 8000,
   "median_win_time": 95.5,
   "par_time": 95.5,
-  "mean_gap": 0.0022,
-  "largest_gap": 0.0088,
+  "mean_gap": 0.0013,
+  "largest_gap": 0.0035,
   "win": [
-   0.0303,
-   0.009,
-   0.0188,
-   0.0238,
-   0.0473,
-   0.098,
-   0.003,
-   0.0113,
-   0.2595,
-   0.061,
-   0.003,
-   0.2345,
-   0.0368,
-   0.1373,
-   0.016,
-   0.0107
+   0.0308,
+   0.008,
+   0.019,
+   0.024,
+   0.0443,
+   0.1005,
+   0.004,
+   0.0098,
+   0.2651,
+   0.0505,
+   0.0029,
+   0.2299,
+   0.0345,
+   0.1465,
+   0.0151,
+   0.0153
   ],
   "place": [
-   0.1435,
-   0.03,
-   0.1295,
-   0.0978,
-   0.1698,
-   0.295,
-   0.0135,
-   0.038,
-   0.5935,
-   0.2303,
-   0.0083,
-   0.5643,
-   0.1523,
-   0.4195,
-   0.0618,
-   0.0533
+   0.1269,
+   0.0281,
+   0.097,
+   0.0864,
+   0.1425,
+   0.3176,
+   0.0175,
+   0.0351,
+   0.6166,
+   0.2394,
+   0.0106,
+   0.5859,
+   0.118,
+   0.4479,
+   0.0686,
+   0.0619
   ]
  }
 }

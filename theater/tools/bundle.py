@@ -24,8 +24,6 @@ def main():
     races = {}
     for n in names:
         d = json.loads((ROOT / "data" / f"{n}.json").read_text(encoding="utf-8"))
-        for h in d["horses"]:
-            h.pop("recent", None)       # not shown by the player
         races[n] = d
     js = "\n".join(strip_module((ROOT / f).read_text(encoding="utf-8")) for f in ("course.js", "engine.js", "player.js"))
     options = "".join(f'<option value="{n}">{races[n]["title"]}</option>' for n in names)

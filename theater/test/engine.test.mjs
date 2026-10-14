@@ -62,3 +62,20 @@ test("the profile sections cover the race in order", () => {
     assert.ok(0 < s.early && s.early <= s.pre && s.pre <= s.last && s.last < D, `${D}`);
   }
 });
+
+test("early position follows running style more than the draw, even where the early pace is the fastest part", () => {
+  // dirt sprint: past laps are fastest early, slower than that at the finish
+  const f = neutral(16, { venue: "中山", surface: "ダ", distance: 1200 });
+  f.pace = { early: 17.0, mid: 16.6, pre: 16.4, last600: 15.6, par_time: 72 };
+  f.horses.forEach((h, i) => { h.style = ((i * 7) % 16) / 15; h.gate = i + 1; });   // style unrelated to gate
+  const res = tally(f, 200, { seed: 3 });
+  const corr = (a, b) => {
+    const r = xs => { const o = xs.map((x, i) => [x, i]).sort((p, q) => p[0] - q[0]); const out = []; o.forEach(([, i], k) => out[i] = k); return out; };
+    const ra = r(a), rb = r(b), m = (a.length - 1) / 2;
+    let s = 0, q = 0; for (let i = 0; i < a.length; i++) { s += (ra[i] - m) * (rb[i] - m); q += (ra[i] - m) ** 2; }
+    return s / q;
+  };
+  const byStyle = corr(res.firstCorner, f.horses.map(h => h.style)), byGate = corr(res.firstCorner, f.horses.map(h => h.gate));
+  assert.ok(byStyle > 0.7, `style ${byStyle}`);
+  assert.ok(byStyle > byGate + 0.3, `style ${byStyle} gate ${byGate}`);
+});
