@@ -95,11 +95,12 @@ def write_readme(log: pd.DataFrame):
                 f"| {r['date']} | {r['name']} | {r['description']} | {r['valid_all_logloss']:.4f} "
                 f"| {r['test_all_logloss']:.4f} | {pct(r['test_all_win'])} | {pct(r['test_all_top3'])} "
                 f"| {r['test_long_logloss']:.4f} | {pct(r['test_long_win'])} "
-                f"| {pct(r.get('test_kikka_like_win'))} | {pct(r.get('test_kikka_like_top3'))} |")
+                + (f"| {pct(r.get('test_kikka_like_win'))} | {pct(r.get('test_kikka_like_top3'))} |"
+                   if surface == "芝" else "| — | — |"))
         n = part.iloc[-1]
         kl = n.get("test_kikka_like_races")
         lines += ["", f"テストのレース数：全体 {int(n['test_all_races'])}、長距離（2200m以上） {int(n['test_long_races'])}"
-                  + (f"、菊花賞型 {int(kl)}" if pd.notna(kl) else "") + "。"]
+                  + (f"、菊花賞型 {int(kl)}" if pd.notna(kl) and surface == "芝" else "") + "。"]
     if SIM_LOG.exists():
         sim = pd.read_csv(SIM_LOG)
         lines += ["", "## シミュレーター", "",
