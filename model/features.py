@@ -8,11 +8,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from . import pedigree
 from . import rating as rating_mod
 
 FEATURES = ["rating", "slope", "unrated", "log_runs", "early_pos5", "kick5",
             "days_off", "last_fin", "fin5", "pop5", "earnings", "dist_change",
-            "weight_rel", "gate_rel", "jockey", "female", "age", "last_y", "best_y3", "y5"]
+            "weight_rel", "gate_rel", "jockey", "female", "age", "last_y", "best_y3", "y5", "ped_long"]
 
 
 def form(df: pd.DataFrame) -> pd.DataFrame:
@@ -78,12 +79,16 @@ def build(df: pd.DataFrame, start: str = "2018-01", **rating_kw) -> pd.DataFrame
         sel["rating"], sel["slope"], sel["n_rated"] = val, slope, n
         parts.append(sel)
     out = pd.concat(parts)
+    ped = pedigree.features(df)
+    out = out.merge(ped, on="horse_id", how="left").set_index(out.index)
+    x = np.log2(out["distance"] / 2000.0)
+    out["ped_long"] = (out["sire_apt"].fillna(0) + 0.5 * out["damsire_apt"].fillna(0)) * x
     out["unrated"] = (out["n_rated"] == 0).astype(float)
     out["log_runs"] = np.log1p(out["runs_before"])
     out["weight_rel"] = out["weight_carried"] - out.groupby("race_id")["weight_carried"].transform("mean")
     out["gate_rel"] = (out["number"] - 1) / (out["field"] - 1).clip(lower=1)
     # Missing form for debut runners: field averages.
-    for c in ["early_pos5", "kick5", "last_fin", "fin5", "pop5", "last_y", "best_y3", "y5"]:
+    for c in ["early_pos5", "kick5", "last_fin", "fin5", "pop5", "last_y", "best_y3", "y5", "ped_long"]:
         out[c] = out[c].fillna(out.groupby("race_id")[c].transform("mean")).fillna(0.5 if c in ("early_pos5", "last_fin", "fin5") else 0.0)
     out["pop5"] = out["pop5"].fillna(3.0)
     out["dist_change"] = out["dist_change"].fillna(0.0)
