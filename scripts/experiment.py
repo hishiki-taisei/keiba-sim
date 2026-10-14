@@ -44,6 +44,11 @@ for key, label, cols in [("bw", "当日馬体重（増減・出走馬平均と�
                          ("bias", "同じ日の先行・内枠バイアス", ["bias_front_x", "bias_inner_x", "bias_front", "bias_inner", "bias_n"])]:
     EXPERIMENTS["offset_" + key] = (f"gbdt_offset ＋ {label}", ("gbdt_offset", _OFF + cols))
 
+EXPERIMENTS["offset_pace2"] = ("offset_pace ＋ ペースの有利不利を差し引いたスピード指数（近5走平均・近3走最高）",
+                               ("gbdt_offset", _OFF + features.PACE_FEATURES))
+EXPERIMENTS["offset_pace2_slow"] = ("offset_pace2 を学習率0.02・葉の最小重み50でゆっくり学習",
+                                    ("gbdt_offset", _OFF + features.PACE_FEATURES, {"lr": 0.02, "min_hess": 50.0, "rounds": 2000}))
+
 
 def log_market(df):
     return np.log(np.clip(evaluate.market_probs(df), 1e-6, 1.0))
@@ -66,7 +71,8 @@ def main(names):
             predict = Logit(spec[1]).fit(train).predict
         else:
             base = log_market if spec[0] == "gbdt_offset" else None
-            m = GBDT(spec[1], rounds=800, lr=0.05, depth=4, base=base).fit(train, valid)
+            kw = {"rounds": 800, "lr": 0.05, "depth": 4, **(spec[2] if len(spec) > 2 else {})}
+            m = GBDT(spec[1], base=base, **kw).fit(train, valid)
             print(name, "trees", len(m.trees), "importance", m.importance())
             predict = m.predict
         row = experiment.record(name, desc, predict, valid, test, surface=SURFACE)

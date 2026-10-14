@@ -18,6 +18,7 @@ REL_FEATURES = ["pop5_rel", "jockey_rel", "y5_rel", "best_y3_rel", "fin5_rel", "
 # v2: race-day body weight, trainer form, pace the horse ran against, same-day track bias.
 V2_FEATURES = ["bw_diff", "bw_rel", "bw_vs_best", "trainer", "trainer_rel",
                "pace_favor5", "pace5", "bias_front_x", "bias_inner_x", "bias_front", "bias_inner", "bias_n"]
+PACE_FEATURES = ["pace_favor5", "pace5", "pace_fig5", "pace_best3", "pace_fig5_rel", "pace_best3_rel"]
 FEATURES = ["rating", "slope", "unrated", "log_runs", "early_pos5", "kick5",
             "days_off", "last_fin", "fin5", "pop5", "earnings", "dist_change",
             "weight_rel", "gate_rel", "jockey", "female", "age", "last_y", "best_y3", "y5", "ped_long"]
@@ -59,6 +60,12 @@ def form(df: pd.DataFrame) -> pd.DataFrame:
     favor = (df["early_pos"].fillna(0.5) - 0.5) * pace  # >0: ran behind in a fast race / led a slow one
     out["pace_favor5"] = favor.groupby(hid).transform(lambda s: s.shift().rolling(5, min_periods=1).mean())
     out["pace5"] = pace.groupby(hid).transform(lambda s: s.shift().rolling(5, min_periods=1).mean())
+    # Speed figure with the pace (dis)advantage taken out; slope fit on pre-2023 runs only.
+    fit = (df["date"] < "2023-01-01") & y.notna()
+    c = float(np.polyfit(favor[fit], y[fit], 1)[0]) if fit.sum() > 100 else 0.0
+    adj = (y - c * favor).groupby(hid)
+    out["pace_fig5"] = adj.transform(lambda s: s.shift().rolling(5, min_periods=1).mean())
+    out["pace_best3"] = adj.transform(lambda s: s.shift().rolling(3, min_periods=1).max())
     # Body weight relative to the weight at the horse's best previous run.
     bw = df["body_weight"] if "body_weight" in df else pd.Series(np.nan, index=df.index)
     best_bw = pd.Series(np.nan, index=df.index)
@@ -194,6 +201,9 @@ def build(df: pd.DataFrame, start: str = "2018-01", asof: pd.Timestamp | None = 
     out["bw_vs_best"] = out["bw_vs_best"].fillna(0.0).clip(-40, 40)
     for c in ["pace_favor5", "pace5"]:
         out[c] = out[c].fillna(0.0)
+    for c in ["pace_fig5", "pace_best3"]:
+        out[c] = out[c].fillna(out.groupby("race_id")[c].transform("mean")).fillna(0.0)
+        out[c + "_rel"] = out[c] - out.groupby("race_id")[c].transform("mean")
     for c in ["bias_front", "bias_inner", "bias_n"]:
         out[c] = out[c].fillna(0.0)
     out["trainer_rel"] = out["trainer"] - out.groupby("race_id")["trainer"].transform("mean")
