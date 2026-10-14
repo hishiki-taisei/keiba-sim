@@ -370,9 +370,7 @@ def main():
     ent["stable"] = ent["horse_name"].map(last_run["stable"])
     date = pd.Timestamp(KIKKA["date"])
     kikka = race_payload({**KIKKA, "n_runners": len(ent)}, ent, df, Cutoff(df, date), payouts, preds)
-    kikka["note"] = ("出走予定馬の段階の予想です。枠順・オッズ・騎手は未確定で、騎手は予定または前走の騎手です。"
-                     "AI勝率は「過去レースのデータ収集」スレッドの勝率モデル、シミュレーションはレースを"
-                     "何千回も走らせた結果です。")
+    kikka["note"] = "出走予定馬での予想です。枠順とオッズは未確定、騎手は予定または前走の騎手です。"
     (OUT / "race" / f"{KIKKA['race_id']}.json").write_text(dump(kikka))
     index["featured"].append({**summary({**KIKKA, "n_runners": len(ent)}), "upcoming": True})
     print("kikka", len(ent), "horses")
