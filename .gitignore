@@ -6,3 +6,4 @@ data/keiba.sqlite*
 data/*.log
 data/*.pkl
 data/preds/
+portal/www/data/
