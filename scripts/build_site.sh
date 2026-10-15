@@ -34,5 +34,5 @@ python3 scripts/predict.py "$RACE_ID" --going "$GOING" "${PREDICT_ARGS[@]}"
 python3 theater/tools/build_field.py --db "$DB" --predictions "data/preds/$RACE_ID.csv" --going "$GOING" \
   --out "theater/data/$NAME.field.json"
 node theater/tools/calibrate.mjs "theater/data/$NAME.field.json" "theater/data/$NAME.json"
-python3 portal/build.py --db "$DB" --featured "theater/data/$NAME.json"
+python3 portal/build.py --db "$DB" --featured "theater/data/$NAME.json" --days "${DAYS:-4}"
 echo "done: portal/www (serve with: cd portal/www && python3 -m http.server)"
