@@ -13,9 +13,10 @@ along; the final odds stand in for the model unless --predictions is given):
 
 With no arguments it builds the Kikuka Sho 2026 field.
 
-The predictions CSV needs a horse-name column (馬) and a win-probability
-column (勝率(モデル)); a jockey column (騎手) and a post-position column (馬番)
-are used when present. Everything else comes from each horse's own past runs
+The predictions CSV is scripts/predict.py's output (data/preds/<race_id>.csv:
+horse_name, jockey_name, number, p_win). An older CSV with a horse-name column
+(馬), a win-probability column (勝率(モデル)) and optionally 騎手 and 馬番 also
+works. Everything else comes from each horse's own past runs
 before --date, read from the database without changing it:
 
   style    average position at the first corner (0 = leads, 1 = last)
@@ -39,6 +40,11 @@ from pathlib import Path
 
 RECENT = 8          # past runs used per horse
 DECAY = 0.8         # weight of each older run relative to the next newer one
+
+
+def style_word(s):
+    """Same cut-offs as styleWord() in player.js."""
+    return "逃げ" if s < 0.18 else "先行" if s < 0.42 else "差し" if s < 0.7 else "追込"
 
 
 def wmean(vals, weights, default, prior=1.0):
@@ -201,8 +207,15 @@ def past_runnings(con, race_name, venue):
 
 
 def entries_from_csv(path, column):
+    """scripts/predict.py output (horse_name, jockey_name, number, p_win), or an
+    older CSV with Japanese headers (馬, 騎手, 馬番 and ``column``)."""
     with open(path, encoding="utf-8-sig") as f:
         preds = list(csv.DictReader(f))
+    if preds and "p_win" in preds[0]:
+        return [{"name": p["horse_name"], "jockey": p.get("jockey_name") or "",
+                 "gate": int(float(p["number"])) if p.get("number") else None,
+                 "odds": float(p["odds"]) if p.get("odds") else None,
+                 "p": float(p["p_win"])} for p in preds]
     return [{"name": p["馬"], "jockey": p.get("騎手") or "",
              "gate": int(p["馬番"]) if p.get("馬番") else None,
              "p": float(p[column])} for p in preds]
@@ -215,6 +228,15 @@ def entries_from_race(con, race_id):
     return [{"name": n, "jockey": j or "", "gate": g, "p": 0.8 / o if o else 0.001,
              "actual": {"finish": f, "passing": pa, "last3f": l3, "time": t}}
             for n, j, g, o, f, pa, l3, t in rows if f is not None]
+
+
+def model_column(a):
+    with open(a.predictions or DEFAULT_PREDS, encoding="utf-8-sig") as f:
+        head = f.readline()
+    return "p_win" if "p_win" in head.split(",") else a.prob_column
+
+
+DEFAULT_PREDS = "/mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv"
 
 
 def main():
@@ -257,7 +279,7 @@ def main():
     else:
         if a.outer is None:  # Kikuka Sho default
             a.outer = a.venue == "京都" and a.distance == 3000
-        entries = entries_from_csv(a.predictions or "/mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv",
+        entries = entries_from_csv(a.predictions or DEFAULT_PREDS,
                                    a.prob_column)
         source = Path(a.predictions or "kikka2026_preliminary.csv").name
         if a.past is None and a.title.startswith("菊花賞"):
@@ -271,6 +293,8 @@ def main():
              "horse_id": hid, **(features(runs, a.surface) if runs else {})}
         if "actual" in e:
             h["actual"] = e["actual"]
+        if e.get("odds"):
+            h["odds"] = e["odds"]
         h["recent"] = [{"date": r["date"], "race": r["race"], "distance": r["distance"], "going": r["going"],
                         "finish": r["finish"], "field": r["field"], "passing": r["passing"], "last3f": r["last3f"]}
                        for r in runs[:5]]
@@ -285,7 +309,7 @@ def main():
               "note": "外" if a.outer else "", "direction": "直線" if a.straight else ""}
     field = {"title": a.title, "date": a.date, "course": course, "going": a.going,
              "pace": pace, "pace_races": n_pace,
-             "model": {"source": source, "column": a.prob_column if source != "単勝オッズ" else None},
+             "model": {"source": source, "column": None if source == "単勝オッズ" else model_column(a)},
              "past": past_runnings(con, a.past, a.venue) if a.past else [], "horses": horses}
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out).write_text(json.dumps(field, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -15,7 +15,7 @@ const ymd = (s) => { const d = new Date(s + "T00:00:00"); return `${d.getFullYea
 const TERMS = {
   "AI勝率": "過去のレース結果から学習したモデルが出した、1着になる確率。出走馬全員分を足すと100%。当日のオッズは使っていません。計算方法は「AIの仕組み」ページにあります。",
   "3着内率": "3着以内に入る確率、または入った割合。",
-  "シミュ": "コースを再現した仮想レースを何千回も走らせて、1着になった割合。",
+  "展開": "各馬の脚質・末脚・スタミナでコース上のレースを再現したもの。何千回も走らせて3着内率を出しています。",
   "単勝": "1着の馬を当てる馬券。数字は100円が何倍になるか。",
   "複勝": "3着以内に入る馬を当てる馬券。",
   "馬連": "1着と2着の2頭を順不同で当てる馬券。",
@@ -74,7 +74,7 @@ async function route() {
       state.race = await getJSON(`data/race/${id}.json`);
       state.open = null;
       state.sort = state.race.horses.some((x) => x.number) ? { key: "num", dir: 1 } : { key: "ai", dir: -1 };
-      if (!["card", "look", "pp", "ai", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "result" && !done(state.race))) state.tab = "card";
+      if (!["card", "look", "pp", "ai", "race", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "race" && !state.race.theater) || (state.tab === "result" && !done(state.race))) state.tab = "card";
     }
   } else state.race = null;
   if (h === "strategy" && !state.strat) state.strat = await getJSON("data/strategy.json");
@@ -156,10 +156,11 @@ function raceHead(r) {
 function raceView(r) {
   const tabs = [["card", "出馬表"], ["look", "見どころ"], ["pp", "馬柱"]];
   if (r.has_ai) tabs.push(["ai", "AI予想"]);
+  if (r.theater) tabs.push(["race", "展開"]);
   tabs.push(["data", "データ"]);
   if (done(r)) tabs.push(["result", "結果"]);
   tabs.push(["bet", "買い目"]);
-  const view = { card: cardView, look: lookView, pp: ppView, ai: aiView, data: dataView, result: resultView, bet: betView }[state.tab](r);
+  const view = { card: cardView, look: lookView, pp: ppView, ai: aiView, race: theaterView, data: dataView, result: resultView, bet: betView }[state.tab](r);
   return `${raceNav(r)}${raceHead(r)}
     ${r.note ? `<p class="notice" style="margin:0">※${esc(r.note)}</p>` : ""}
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${state.tab === k}">${l}</button>`).join("")}</div>
@@ -243,7 +244,7 @@ function detail(h, r) {
   return `<div class="dgrid wide">
     <div><h4>チェック項目</h4>${checkTable(h.checks)}<p class="small sub" style="margin:4px 0 0">${CHECK_NOTE}</p></div>
     <div>
-      ${h.p_ai != null ? `<h4>確率</h4><dl class="kv"><dt>${term("AI勝率")}</dt><dd>${pct(h.p_ai)}</dd>${h.p_sim != null ? `<dt>${term("シミュ", "シミュ勝率")}</dt><dd>${pct(h.p_sim)}</dd><dt>シミュ3着内率</dt><dd>${pct(h.p_sim_place)}</dd>` : ""}</dl>` : ""}
+      ${h.p_ai != null ? `<h4>確率</h4><dl class="kv"><dt>${term("AI勝率")}</dt><dd>${pct(h.p_ai)}</dd>${h.p_place != null ? `<dt>${term("3着内率")}</dt><dd>${pct(h.p_place)}</dd>` : ""}</dl>` : ""}
       <h4 style="margin-top:8px">成績（1着-2着-3着-着外）</h4><dl class="kv">
       <dt>全成績</dt><dd>${rec(h.records.all)}</dd>
       <dt>獲得賞金</dt><dd>${(h.prize ?? 0).toLocaleString()}万円</dd>
@@ -321,6 +322,19 @@ function ppView(r) {
     <p class="small sub" style="margin:0">着順の背景：1着は赤、2着は青、3着は緑。「上」は${term("上がり")}、赤字はメンバー最速。「差」は勝ち馬との${term("着差", "タイム差")}。</p>`;
 }
 
+// --- 展開 (the race replay, the same component as theater/)
+let theaterLoaded = false;
+function theaterView(r) {
+  if (!theaterLoaded) {
+    theaterLoaded = true;
+    const s = document.createElement("script");
+    s.type = "module"; s.src = "theater/player.js";
+    document.head.appendChild(s);
+  }
+  return `<p class="small sub" style="margin:0">各馬の${term("脚質")}・末脚・スタミナでコースを走らせます。「もう一回」で毎回違うレースになり、何千回も走らせるとAI勝率どおりの割合で勝つように合わせてあります。ペースや馬場を変えると、得意不得意で勝率が動きます。</p>
+    <div class="theater"><race-theater src="${esc(r.theater)}"></race-theater></div>`;
+}
+
 // --- AI予想
 function aiView(r) {
   const hs = r.horses.filter((h) => h.p_ai != null).sort((a, b) => b.p_ai - a.p_ai);
@@ -330,10 +344,10 @@ function aiView(r) {
     ${hasNum ? `<td class="num">${h.number ?? ""}</td>` : ""}
     <td><div class="hn">${esc(h.name)}</div><div class="hs">${esc(h.jockey ?? "")}</div></td>
     <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div></td>
-    <td class="r pc">${pct(h.p_sim)}</td><td class="r">${pct(h.p_sim_place, 0)}</td>
+    <td class="r">${pct(h.p_place, 0)}</td>
     <td class="pc small">${(h.checks || []).filter((c) => c.s).slice(0, 3).map((c) => `<span class="${markCls(c.s)}">${MARKTXT[c.s]}</span>${esc(c.k)} `).join("")}</td></tr>`).join("");
-  return `<div class="tw"><table><thead><tr><th class="c">印</th><th class="c">順</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th><th class="r">${term("AI勝率")}</th><th class="r pc">${term("シミュ", "シミュ勝率")}</th><th class="r">${term("3着内率")}</th><th class="pc">データの＋－</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">3着内率はシミュレーションの値。印はAI勝率の上位5頭につけています。<a href="#about">計算方法</a></p>`;
+  return `<div class="tw"><table><thead><tr><th class="c">印</th><th class="c">順</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th><th class="r">${term("AI勝率")}</th><th class="r">${term("3着内率")}</th><th class="pc">データの＋－</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small sub" style="margin:0">3着内率は、AI勝率どおりに勝つよう合わせた${term("展開")}のレースを何千回も走らせた結果です（${r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>で同じレースを見られます` : "展開タブと同じ値"}）。印はAI勝率の上位5頭につけています。<a href="#about">計算方法</a></p>`;
 }
 
 // --- コースデータ
@@ -507,26 +521,27 @@ function glossaryView() {
 }
 function aboutView() {
   const rows = [
-    ["芝 全4,642レース", "AI", "27.1%", "57.8%"], ["", "1番人気", "33.6%", "65.5%"],
-    ["芝2400m以上 349レース", "シミュレーション", "28.4%", "64.5%"], ["", "AI", "30.9%", "65.9%"], ["", "1番人気", "39.5%", "70.2%"],
+    ["芝 全4,642レース", "AI（オッズなし）", "27.6%", "58.3%"], ["", "AI（オッズ補正）", "33.2%", "65.2%"], ["", "1番人気", "33.6%", "65.5%"],
+    ["芝2200m以上 549レース", "AI（オッズなし）", "34.4%", "65.2%"], ["", "AI（オッズ補正）", "37.0%", "69.8%"], ["", "1番人気", "37.3%", "69.0%"],
   ].map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td class="r">${x[2]}</td><td class="r">${x[3]}</td></tr>`).join("");
   return `<h1 style="font-size:18px">AI勝率の仕組み</h1>
-    <div class="prose"><p>AI勝率は「このメンバーで何度も走ったら、その馬が何回に1回勝つか」の見積もりです。出走馬全員分を足すとちょうど100%になります。当日のオッズは使っていません。</p></div>
+    <div class="prose"><p>AI勝率は「このメンバーで何度も走ったら、その馬が何回に1回勝つか」の見積もりです。出走馬全員分を足すとちょうど100%になります。オッズが出る前は過去の走りだけから出し、オッズが出たあとは、オッズを出発点にAIがずれを直した値に切り替えます。</p></div>
     <h2 class="sec">計算の手順</h2>
     <ol class="steps">
       <li><b>馬ごとの能力値を出す</b><p>過去の各レースで、その馬の平均速度が同じレースの真ん中の馬より何%速かったかを測ります。同じレースの中で比べるので、コースや馬場、ペースの違いは打ち消されます。一緒に走った相手を通じて全馬をつないで計算するので、G1で勝ち馬に迫った馬はG1級として評価されます。新しいレースほど重く数え、距離が延びたときに能力が上がるか下がるかも一緒に出します。</p></li>
-      <li><b>21項目にまとめる</b><p>能力値と距離の向き不向き、前走と近5走の着順、近5走の人気（過去のレースのもの）、最初のコーナーでの位置、上がりの速さ、休養明けの日数、距離の延長・短縮、斤量と枠（出走馬の平均との差）、騎手の過去1年の3着内率、性別・年齢、出走数、獲得賞金、父と母父の産駒の長距離適性です。どれもそのレースより前のデータだけで計算しています。</p></li>
-      <li><b>点数にして確率に直す</b><p>21項目それぞれに重みをかけて足し、馬ごとの点数を出します。点数の差を出走馬の中で比べて確率に直します（点数が1上がると勝つ見込みが約2.7倍になる計算です）。重みは2018〜2022年のレースで、実際に勝った馬に高い確率がつくように決め、2023年のレースで調整しました。</p></li>
-      <li><b>シミュレーションで走らせる（菊花賞のみ）</b><p>長距離では展開やスタミナの影響が大きいので、点数から各馬の最高速度を、過去走から脚質・末脚・スタミナを決め、京都芝3000mのコースを数百回走らせます。勝った回数の割合が「シミュ勝率」、3着以内に入った割合が「3着内率」です。</p></li>
+      <li><b>項目にまとめる</b><p>能力値と距離の向き不向き、近5走の着順・人気・位置取り・上がり、休養明けの日数、距離の延長・短縮、斤量と枠、騎手の過去1年の成績、性別・年齢、出走数、獲得賞金、血統の長距離適性、重い馬場の得意不得意、それぞれ出走馬の平均との差などです。どれもそのレースより前のデータだけで計算しています。</p></li>
+      <li><b>確率に直す</b><p>決定木をたくさん足し合わせるモデル（勾配ブースティング）で、どの組み合わせの馬が勝ちやすいかを学び、出走馬の中で比べて確率に直します。2018〜2022年のレースで学び、2023年のレースで学習の止めどころを決めました。</p></li>
+      <li><b>オッズ補正（オッズが出たあと）</b><p>オッズには大勢の予想が集まっているので、オッズの確率を出発点にして、AIは過去の走りやペースの有利不利から「オッズのずれ」だけを直します。</p></li>
+      <li><b>${term("展開")}で3着内率を出す</b><p>脚質・末脚・スタミナ・長距離・道悪の得意不得意を過去走から決め、AI勝率どおりの割合で勝つように強さを合わせたうえで、コースを何千回も走らせます。3着以内に入った割合が「3着内率」です。展開タブで同じレースを見られます。</p></li>
     </ol>
     <h2 class="sec">テストの成績</h2>
-    <p class="small sub" style="margin:0">学習に使っていない2024年1月以降のレースで、AIがいちばん高い勝率をつけた馬（本命）の成績です（2026年10月14日時点）。</p>
+    <p class="small sub" style="margin:0">学習に使っていない2024年1月以降のレースで、AIがいちばん高い勝率をつけた馬（本命）の成績です（2026年10月14日時点）。オッズ補正は確定オッズで計算しています。</p>
     <div class="tw"><table><thead><tr><th>対象</th><th>予想</th><th class="r">本命が1着</th><th class="r">本命が3着内</th></tr></thead><tbody>${rows}</tbody></table></div>
     <h2 class="sec">わかっている弱点</h2>
     <div class="prose">
-      <p>本命の的中率は、まだ1番人気に届いていません。オッズには大勢の予想が集まっているので、オッズを使わないモデルが人気より当てるのは簡単ではありません。このサイトでは、AI勝率をオッズと並べて、AIが人気より高く見ている馬（${term("期待値")}が1を超える馬）を探す使い方を想定しています。</p>
+      <p>オッズを使わないAIの本命は、1番人気ほど当たりません。オッズ補正後の確率は、オッズそのものより少しだけ正確です（確率の当たり具合を測る対数損失が4,642レースで1.9093→1.9074）。本命が当たる割合はほぼ同じなので、このサイトでは「人気より当てる」ではなく、AIが人気より高く見ている馬（${term("期待値")}が1を超える馬）と、レース展開を見るための道具として使うことを想定しています。</p>
       <p>菊花賞は全馬が3000mを初めて走るので、距離適性は能力値の距離の向き不向きと血統からの推測です。</p>
-      <p>調教、パドック、当日の馬体重はまだ入っていません。枠順が決まる前の予想なので、枠は仮の値で計算しています。</p>
+      <p>調教とパドックはまだ入っていません。枠順が決まる前の予想では、枠を毎回くじ引きにして平均しています。</p>
     </div>`;
 }
 

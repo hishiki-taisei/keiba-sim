@@ -1,7 +1,12 @@
 """Build the data files for the prediction portal (portal/www).
 
-    python3 portal/build.py --db /mnt/project-files/keiba-sim/data/keiba.sqlite \
-        --predictions /mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv
+    python3 portal/build.py --db data/keiba.sqlite --featured theater/data/kikka2026.json
+
+--featured is a race-replay file made by theater/tools/build_field.py and
+calibrate.mjs from scripts/predict.py's output. The portal takes the win
+probability, the top-3 rate (1000s of simulated races) and each horse's running
+style from it, so the race page and the replay always show the same numbers.
+The replay itself is copied to www/theater/ and shown in the 展開 tab.
 
 Read-only: opens the database in read-only mode and never imports the model
 code, so it can run next to the data-collection and model work. Every figure
@@ -12,6 +17,8 @@ Writes portal/www/data/index.json and portal/www/data/race/<race_id>.json.
 """
 import argparse
 import itertools
+import shutil
+import sys
 import json
 import math
 import re
@@ -23,6 +30,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "www" / "data"
+THEATER = ROOT.parent / "theater"
+sys.path.insert(0, str(THEATER / "tools"))
+import build_field  # noqa: E402  (one definition of running style for the site and the replay)
 
 # Upcoming race shown before its card is in the database.
 KIKKA = {
@@ -79,21 +89,23 @@ def dist_band(d):
 
 
 def style_of(passing, field):
-    """Running style from the first corner position."""
-    if not isinstance(passing, str) or not field:
+    """Running style of one run, from the first-corner position (0 = led, 1 = last)."""
+    p = build_field.positions(passing) if isinstance(passing, str) else []
+    if not p or not field or field < 2:
         return None
-    try:
-        first = int(passing.split("-")[0])
-    except ValueError:
+    return build_field.style_word((p[0] - 1) / (field - 1))
+
+
+def horse_style(hist):
+    """A horse's running style, computed exactly as the race replay does
+    (recent flat runs, newer ones weighted more)."""
+    h = hist[(hist["surface"] != "障") & hist["finish"].notna() & (hist["finish"] > 0)]
+    runs = [{"field": int(r.n_runners or 0), "passing": r.passing, "finish": r.finish, "surface": r.surface,
+             "last3f": None, "med3f": None, "distance": r.distance, "going": r.going}
+            for r in h.tail(build_field.RECENT).iloc[::-1].itertuples()]
+    if not runs:
         return None
-    r = first / field
-    if first == 1:
-        return "逃げ"
-    if r <= 0.35:
-        return "先行"
-    if r <= 0.7:
-        return "差し"
-    return "追込"
+    return build_field.style_word(build_field.features(runs)["style"])
 
 
 def num(x, nd=None):
@@ -438,8 +450,7 @@ def race_payload(race, entrants, df, cut, payouts, preds=None):
             "jockey_rec": cut.jockey_rec(e.get("jockey_id"), e.get("jockey_name")),
             "sire_rec": cut.sire_rec(e.get("sire_id"), race["surface"], band),
         }
-        styles = [r["style"] for r in h["past"][:5] if r["style"]]
-        h["style"] = max(set(styles), key=styles.count) if styles else None
+        h["style"] = horse_style(hist)
         if preds is not None:
             p = preds.get(h["name"])
             if p:
@@ -604,22 +615,51 @@ def summary(race):
     return out
 
 
-def read_preds(path):
-    p = pd.read_csv(path)
+def read_featured(path):
+    """Win probability, top-3 rate and running style per horse from a calibrated race-replay file."""
+    f = json.loads(Path(path).read_text(encoding="utf-8"))
+    place = f.get("calibration", {}).get("place") or [None] * len(f["horses"])
     out = {}
-    for r in p.to_dict("records"):
-        out[r["馬"]] = {
-            "p_ai": num(r.get("勝率(モデル)"), 4), "p_sim": num(r.get("勝率(シミュ)"), 4),
-            "p_sim_place": num(r.get("複勝率(シミュ)"), 4),
-            "jockey_plan": r.get("騎手") if isinstance(r.get("騎手"), str) else None,
+    for h, pl in zip(f["horses"], place):
+        out[h["name"]] = {
+            "p_ai": num(h["p_model"], 4), "p_place": num(pl, 4),
+            "style": build_field.style_word(h["style"]) if h.get("style") is not None else None,
+            "jockey_plan": h.get("jockey") or None,
+            "number": h.get("gate"), "frame": frame_of(h.get("gate"), len(f["horses"])),
+            "odds": h.get("odds"),
         }
-    return out
+    return f, out
+
+
+def frame_of(number, n):
+    """JRA post position (枠) of horse ``number`` in a field of ``n``: eight frames,
+    the extra horses going to the outside frames."""
+    if not number:
+        return None
+    base, extra = divmod(n, 8)
+    sizes = [base + (1 if f >= 8 - extra else 0) for f in range(8)]
+    for f, size in enumerate(sizes, 1):
+        number -= size
+        if number <= 0:
+            return f
+    return 8
+
+
+def copy_theater(field_path):
+    """The replay's scripts plus this race's file, served next to the site."""
+    dst = ROOT / "www" / "theater"
+    (dst / "data").mkdir(parents=True, exist_ok=True)
+    for name in ("player.js", "engine.js", "course.js", "tally-worker.js"):
+        shutil.copy(THEATER / name, dst / name)
+    shutil.copy(field_path, dst / "data" / Path(field_path).name)
+    return f"theater/data/{Path(field_path).name}"
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="/mnt/project-files/keiba-sim/data/keiba.sqlite")
-    ap.add_argument("--predictions", default="/mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv")
+    ap.add_argument("--featured", default=str(THEATER / "data" / "kikka2026.json"),
+                    help="calibrated race-replay file of the upcoming race (theater/data/<name>.json)")
     ap.add_argument("--days", type=int, default=2, help="how many recent race days to include")
     args = ap.parse_args()
 
@@ -627,8 +667,8 @@ def main():
     (OUT / "race").mkdir(parents=True, exist_ok=True)
     index = {"built": pd.Timestamp.now().strftime("%Y-%m-%d"), "days": [], "featured": [], "history": []}
 
-    # Upcoming: Kikka-sho, from the prediction file
-    preds = read_preds(args.predictions)
+    # Upcoming: Kikka-sho, from the race-replay file (same numbers as the replay)
+    field, preds = read_featured(args.featured)
     names = list(preds)
     latest = horses[horses["name"].isin(names)].drop_duplicates("name", keep="last")
     last_run = df[df["horse_name"].isin(names)].groupby("horse_name").tail(1).set_index("horse_name")
@@ -639,6 +679,9 @@ def main():
     ent["weight_carried"] = ent["sex"].map(lambda s: 55.0 if s == "牝" else 57.0)
     ent["jockey_name"] = [preds[n]["jockey_plan"] or last_run["jockey_name"].get(n) for n in names]
     ent["jockey_id"] = [None if preds[n]["jockey_plan"] else last_run["jockey_id"].get(n) for n in names]
+    ent["number"] = [preds[n]["number"] for n in names]
+    ent["frame"] = [preds[n]["frame"] for n in names]
+    ent["odds"] = [preds[n]["odds"] for n in names]
     ent["trainer_name"] = ent["horse_name"].map(last_run["trainer_name"])
     ent["stable"] = ent["horse_name"].map(last_run["stable"])
     date = pd.Timestamp(KIKKA["date"])
@@ -652,6 +695,8 @@ def main():
     df = df[df["race_id"] != KIKKA["race_id"]]
     kikka = race_payload({**KIKKA, "n_runners": len(ent)}, ent, df, Cutoff(df, date), payouts, preds)
     kikka["note"] = "出走予定馬での予想です。枠順とオッズは未確定、騎手は予定または前走の騎手です。"
+    kikka["theater"] = copy_theater(args.featured)
+    kikka["model"] = field.get("model")
     (OUT / "race" / f"{KIKKA['race_id']}.json").write_text(dump(kikka))
     index["featured"].append({**summary({**KIKKA, "n_runners": len(ent)}), "upcoming": True})
     print("kikka", len(ent), "horses")
