@@ -208,6 +208,13 @@ def pedigree(html: str, horse_id: str) -> dict | None:
             "sire_sire": siresire, "sire_sire_id": siresire_id}
 
 
+def _grade(title: str) -> str | None:
+    m = re.search(r"\((G[1-3]|GI{1,3}|L|OP)\)", title)
+    if not m:
+        return None
+    return {"GI": "G1", "GII": "G2", "GIII": "G3"}.get(m.group(1), m.group(1))
+
+
 def entries(html: str, race_id: str) -> dict | None:
     """race.netkeiba.com/race/shutuba.html -> race conditions and the entered horses.
 
@@ -224,6 +231,9 @@ def entries(html: str, race_id: str) -> dict | None:
     surface = {"障": "障", "芝": "芝"}.get(course.group(1) if course else "", "ダ")
     going = re.search(r"馬場\s*:\s*(良|稍重|稍|重|不良|不)", cond)
     post = re.search(r"(\d{1,2}:\d{2})発走", cond)
+    data02 = b.select_one(".RaceData02")
+    cls = data02.get_text(" ", strip=True) if data02 else ""
+    m_cls = re.search(r"\S*(新馬|未勝利|勝クラス|オープン|万下)\S*(?:\s+\S+)*?\s+(定量|別定|ハンデ|馬齢)", cls)
     title = b.title.get_text() if b.title else ""
     date = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title)
     out, seen = [], set()
@@ -260,4 +270,5 @@ def entries(html: str, race_id: str) -> dict | None:
             "date": f"{date.group(1)}-{int(date.group(2)):02d}-{int(date.group(3)):02d}" if date else None,
             "surface": surface, "distance": int(dist.group(1)) if dist else None,
             "going": going.group(1) if going else None, "post_time": post.group(1) if post else None,
+            "class_text": m_cls.group(0) if m_cls else cls, "grade": _grade(title),
             "horses": out}

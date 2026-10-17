@@ -4,8 +4,13 @@
     python3 -m live night                         # add new results to the DB, settle bets, retrain, report
     python3 -m live bet|settle|train|report|update  # the single steps
 
-Every race gets 100 yen to win and 100 yen to place on the model's top pick, plus 100 yen
-to win on every horse whose model probability x odds is at least 1.2 (odds under 100).
+Three groups of 100-yen bets run side by side (STRATEGIES):
+
+    オッズ準拠モデル  the market-offset model: win and place on its top pick, win on p x odds >= 1.2
+    独自モデル        the odds-free model (the horse's own record only): win and place on its top pick
+    Claudeの買い方    rules chosen on 2018-2023 and checked on 2024- (scripts/strategy_search.py,
+                      scripts/rule_search.py): win on horses the odds-free model rates at 3x the market
+                      (under 20/1), and dirt favourites backed by several of the facts that held up
 Records live in the project's shared folder (keiba-sim/betting/):
 
     bets.csv               one row per paper bet, settled the night after the race
@@ -53,9 +58,21 @@ MODELS = OUT / "models"
 WIN_FEATURES = features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES + features.PACE_FEATURES
 STAKE = 100
 EV_MIN, EV_MAX_ODDS = 1.2, 100.0
-STRATEGIES = {"fav_win": "本命の単勝", "fav_place": "本命の複勝", "value_win": "期待値買い（単勝）"}
+STRATEGIES = {  # key: (group, label)
+    "fav_win": ("オッズ準拠モデル", "本命の単勝"), "fav_place": ("オッズ準拠モデル", "本命の複勝"),
+    "value_win": ("オッズ準拠モデル", "期待値買い（単勝）"),
+    "indep_win": ("独自モデル", "本命の単勝"), "indep_place": ("独自モデル", "本命の複勝"),
+    "claude_gap_win": ("Claudeの買い方", "独自モデルが市場の3倍評価（単勝）"),
+    "claude_dirt_place": ("Claudeの買い方", "ダート1番人気＋好材料2つ以上（複勝）"),
+    "claude_dirt_win": ("Claudeの買い方", "ダート1番人気＋好材料3つ以上（単勝）"),
+}
+GAP_RATIO, GAP_MAX_ODDS = 3.0, 20.0
+# Dirt facts that held up on 2018-2023 and on 2024- for the favourite (experiments/rules.md):
+# strong field last time, wide draw, dropping in distance, ran against the pace, high speed figure.
+DIRT_FACTS = {"last_field_y5": (0.8, ">="), "gate_rel": (0.8, ">="), "dist_change": (0.2, "<="),
+              "pace_favor5": (0.2, "<="), "rating": (0.8, ">=")}
 BET_COLS = ["date", "race_id", "venue", "race_no", "post_time", "race_name", "surface", "distance",
-            "strategy", "bet_type", "number", "horse_name", "stake", "p_model", "odds_at_bet", "odds_source",
+            "strategy", "bet_type", "number", "horse_name", "stake", "p_model", "p_market", "odds_at_bet", "odds_source",
             "placed_at", "model", "settled", "finish", "final_odds", "payout"]
 ODDS_SOURCE = {"yoso": "予想オッズ", "middle": "発売中オッズ", "result": "確定オッズ"}
 GOING_NORM = {"稍": "稍重", "不": "不良"}
@@ -120,19 +137,42 @@ def train():
         model.base = None  # a function; set again on load so the pickle does not depend on where it ran
         with open(MODELS / f"{key}.pkl", "wb") as fh:
             pickle.dump({"model": model, "info": info}, fh)
+        # The odds-free model.
+        probe = GBDT(features.INDEP_FEATURES, rounds=1500).fit(F[~last], F[last])
+        n = max(len(probe.trees), 20)
+        indep = GBDT(features.INDEP_FEATURES, rounds=n).fit(F)
+        info_i = dict(info, surface=surface + "（独自）", trees=n,
+                      valid_logloss=round(evaluate.metrics(v, probe.predict(v))["logloss"], 4))
+        with open(MODELS / f"indep_{key}.pkl", "wb") as fh:
+            pickle.dump({"model": indep, "info": info_i}, fh)
+        if surface == "ダ":  # thresholds for the dirt facts, from the years the rules were chosen on
+            tr = F[F["date"].dt.year <= 2022]
+            th = {c: [float(tr[c].quantile(q)), op] for c, (q, op) in DIRT_FACTS.items()}
+            (MODELS / "dirt_facts.json").write_text(json.dumps(th, indent=1))
         log = OUT / "train_log.csv"
-        pd.DataFrame([info]).to_csv(log, mode="a", header=not log.exists(), index=False)
-        print("trained", info, flush=True)
+        pd.DataFrame([info, info_i]).to_csv(log, mode="a", header=not log.exists(), index=False)
+        print("trained", info, info_i, flush=True)
 
 
-def load_model(surface: str):
-    path = MODELS / f"{'turf' if surface == '芝' else 'dirt'}.pkl"
+def load_model(surface: str, indep: bool = False):
+    path = MODELS / f"{'indep_' if indep else ''}{'turf' if surface == '芝' else 'dirt'}.pkl"
     if not path.exists():
         return None, None
     with open(path, "rb") as fh:
         d = pickle.load(fh)
-    d["model"].base = log_market
+    d["model"].base = None if indep else log_market
     return d["model"], d["info"]
+
+
+def dirt_facts(rows: pd.DataFrame) -> pd.Series:
+    path = MODELS / "dirt_facts.json"
+    if not path.exists():
+        return pd.Series(0, index=rows.index)
+    th = json.loads(path.read_text())
+    n = pd.Series(0, index=rows.index)
+    for c, (v, op) in th.items():
+        n += (rows[c] >= v) if op == ">=" else (rows[c] <= v)
+    return n
 
 
 # -- entries and odds ---------------------------------------------------------
@@ -178,7 +218,8 @@ def entry_rows(df: pd.DataFrame, races: list[dict]) -> pd.DataFrame:
                                  distance=race["distance"], field=n, finish=np.nan, time_sec=np.nan,
                                  odds=np.nan, prize=np.nan, speed=np.nan, early_pos=np.nan,
                                  kick_rel=np.nan, last3f=np.nan, passing=None, race_name=race["title"],
-                                 going=going))
+                                 going=going, venue=parse.VENUES[race["race_id"][4:6]],
+                                 class_text=race.get("class_text"), grade=race.get("grade")))
     rows = pd.concat(parts, ignore_index=True)
     rows["number"] = rows["number"].astype(int)
     keep = [c for c in rows.columns if c in df.columns or c in ("jockey_name",)]
@@ -197,7 +238,7 @@ def read_bets() -> pd.DataFrame:
     b = pd.read_csv(BETS, dtype={"race_id": str, "date": str}) if BETS.exists() else pd.DataFrame(columns=BET_COLS)
     b["settled"] = b["settled"].astype(str).str.lower().eq("true")
     b["finish"] = b["finish"].astype(object)
-    for c in ("payout", "final_odds", "stake", "p_model", "odds_at_bet"):
+    for c in ("payout", "final_odds", "stake", "p_model", "p_market", "odds_at_bet"):
         b[c] = pd.to_numeric(b[c], errors="coerce")
     return b
 
@@ -242,6 +283,7 @@ def bet(day: dt.date):
         if not group:
             continue
         model, info = load_model(surface) if surface != "障" else (None, None)
+        indep = load_model(surface, indep=True)[0] if surface != "障" else None
         if model is not None:
             if surface not in df_cache:
                 df_cache[surface] = load_runs(LOCAL_DB, surface=surface)
@@ -253,6 +295,9 @@ def bet(day: dt.date):
             continue
         rows["p_market"] = evaluate.market_probs(rows)
         rows["p_model"] = model.predict(rows) if model is not None else rows["p_market"]
+        rows["p_indep"] = indep.predict(rows) if indep is not None else np.nan
+        rows["pop_rank"] = rows.groupby("race_id")["odds"].rank(method="first")
+        rows["facts"] = dirt_facts(rows) if surface == "ダ" else 0
         name = "offset_pace2" if model is not None else "market"
         for race in group:
             d = rows[rows["race_id"] == race["race_id"]]
@@ -261,7 +306,8 @@ def bet(day: dt.date):
             for _, h in d.iterrows():
                 preds.append({"race_id": race["race_id"], "number": int(h["number"]), "horse_name": h["horse_name"],
                               "odds_at_bet": h["odds"], "p_market": round(h["p_market"], 5),
-                              "p_model": round(h["p_model"], 5), "model": name})
+                              "p_model": round(h["p_model"], 5), "p_indep": round(float(h["p_indep"]), 5),
+                              "pop_rank": int(h["pop_rank"]), "facts": int(h["facts"]), "model": name})
             post = race.get("post_time")
             if post:
                 start = dt.datetime.combine(day, dt.time.fromisoformat(post.zfill(5)), JST)
@@ -272,13 +318,25 @@ def bet(day: dt.date):
             picks = [("fav_win", "単勝", top), ("fav_place", "複勝", top)]
             picks += [("value_win", "単勝", h) for _, h in d.iterrows()
                       if h["p_model"] * h["odds"] >= EV_MIN and h["odds"] < EV_MAX_ODDS and name != "market"]
+            if indep is not None:
+                itop = d.loc[d["p_indep"].idxmax()]
+                picks += [("indep_win", "単勝", itop), ("indep_place", "複勝", itop)]
+                picks += [("claude_gap_win", "単勝", h) for _, h in d.iterrows()
+                          if h["p_indep"] >= GAP_RATIO * h["p_market"] and h["odds"] < GAP_MAX_ODDS]
+                fav = d.loc[d["pop_rank"].idxmin()]
+                if surface == "ダ" and fav["facts"] >= 2:
+                    picks.append(("claude_dirt_place", "複勝", fav))
+                if surface == "ダ" and fav["facts"] >= 3:
+                    picks.append(("claude_dirt_win", "単勝", fav))
             for strat, kind, h in picks:
+                pm = h["p_indep"] if strat.startswith(("indep", "claude_gap")) else h["p_model"]
                 new.append({"date": day.isoformat(), "race_id": race["race_id"],
                             "venue": parse.VENUES[race["race_id"][4:6]], "race_no": int(race["race_id"][-2:]),
                             "post_time": post, "race_name": race["title"].replace(" 出馬表", ""),
                             "surface": surface, "distance": race["distance"], "strategy": strat,
                             "bet_type": kind, "number": int(h["number"]), "horse_name": h["horse_name"],
-                            "stake": STAKE, "p_model": round(float(h["p_model"]), 4), "odds_at_bet": h["odds"],
+                            "stake": STAKE, "p_model": round(float(pm), 4), "p_market": round(float(h["p_market"]), 4),
+                            "odds_at_bet": h["odds"],
                             "odds_source": race["odds_source"], "placed_at": stamp.isoformat(timespec="seconds"),
                             "model": name, "settled": False, "finish": None, "final_odds": None, "payout": None})
     if preds:
@@ -349,10 +407,13 @@ def _strategy_table(s: pd.DataFrame, by: str | None = None) -> list[str]:
     g = s.groupby(keys, sort=False)
     t = pd.DataFrame({"bets": g.size(), "hits": g["payout"].apply(lambda x: (x > 0).sum()),
                       "stake": g["stake"].sum(), "ret": g["payout"].sum()}).reset_index()
-    head = ([{"surface": "芝ダ障", "venue": "競馬場"}.get(by, by)] if by else []) + ["買い方", "点数", "的中", "的中率", "投資", "払戻", "回収率"]
+    order = {k: i for i, k in enumerate(STRATEGIES)}
+    t = t.sort_values(([by] if by else []) + ["strategy"], key=lambda c: c.map(order) if c.name == "strategy" else c)
+    head = ([{"surface": "芝ダ障", "venue": "競馬場"}.get(by, by)] if by else []) + ["グループ", "買い方", "点数", "的中", "的中率", "投資", "払戻", "回収率"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for _, r in t.iterrows():
-        cells = ([str(r[by])] if by else []) + [STRATEGIES.get(r["strategy"], r["strategy"]), str(r["bets"]), str(r["hits"]),
+        grp, label = STRATEGIES.get(r["strategy"], ("", r["strategy"]))
+        cells = ([str(r[by])] if by else []) + [grp, label, str(r["bets"]), str(r["hits"]),
                                                 f"{r['hits'] / max(r['bets'], 1):.1%}", _yen(r["stake"]), _yen(r["ret"]),
                                                 f"{r['ret'] / max(r['stake'], 1):.1%}"]
         lines.append("| " + " | ".join(cells) + " |")
@@ -385,11 +446,12 @@ def model_feedback(settled_dates: list[str]) -> list[str]:
     d = ll("p_model") - ll("p_market")
     lines = [f"対象：モデルで予想した決着済み {w['race_id'].nunique()} レース（障害は除く）", "",
              "| 予想 | 対数損失（低いほど良い） | 本命の勝率 |", "|---|---|---|"]
-    for label, col in (("モデル", "p_model"), ("賭けた時点のオッズ", "p_market"), ("確定オッズ", "p_final")):
+    cols = [("オッズ準拠モデル", "p_model")] + ([("独自モデル（オッズ不使用）", "p_indep")] if "p_indep" in m and m["p_indep"].notna().all() else [])
+    for label, col in cols + [("賭けた時点のオッズ", "p_market"), ("確定オッズ", "p_final")]:
         top = m.loc[m.groupby("race_id")[col].idxmax()]
         lines.append(f"| {label} | {ll(col).mean():.4f} | {(top['finish'] == 1).mean():.1%} |")
     se = d.std() / np.sqrt(len(d)) if len(d) > 1 else float("nan")
-    lines += ["", f"モデル − 賭けた時点のオッズ：{d.mean():+.4f}（±{se:.4f}）。"
+    lines += ["", f"オッズ準拠モデル − 賭けた時点のオッズ：{d.mean():+.4f}（±{se:.4f}）。"
               + ("マイナスならモデルがオッズより当たっています。" if len(d) >= 30 else "まだレース数が少なく、差は偶然の範囲です。")]
     # Value threshold sweep on the races so far (win payouts approximated by final odds).
     lines += ["", "期待値のしきい値を変えた場合（確定オッズで計算した単勝の回収率）：", "",
@@ -413,9 +475,13 @@ def report():
     s = b[b["settled"].astype(bool)].copy()
     lines = ["# 仮想ベットの成績", "",
              f"更新：{now_jst():%Y-%m-%d %H:%M} JST。実際の馬券は買っていません。1点100円。",
-             "", "買い方：本命（モデルの勝率がいちばん高い馬）の単勝と複勝を全レース、"
-             f"それに勝率×オッズが{EV_MIN}以上の馬（{EV_MAX_ODDS:.0f}倍以上は除く）の単勝。"
-             "障害レースはモデルがないのでオッズ1番人気を本命にしています。", ""]
+             "", "3つのグループを並べて賭けています。",
+             f"- **オッズ準拠モデル**：オッズを出発点に補正するモデル。本命の単勝・複勝を全レース、勝率×オッズが{EV_MIN}以上の馬の単勝。"
+             "障害レースはモデルがないので1番人気を本命にしています。",
+             "- **独自モデル**：オッズも過去の人気も使わず、馬の走りの記録（スピード指数、近走、ペース、コース・距離の得意、昇級降級、騎手の格上げ、前走の相手の強さなど）だけで勝率を出すモデル。本命の単勝・複勝を芝・ダートの全レース。",
+             f"- **Claudeの買い方**：過去データ（2018〜2023年で選び、2024年以降で確認）から決めたルール。独自モデルの勝率が市場の{GAP_RATIO:.0f}倍以上で{GAP_MAX_ODDS:.0f}倍未満の馬の単勝。"
+             "ダートの1番人気のうち、好材料（前走の相手が強い・外枠・距離短縮・前走でペースが不利・スピード指数上位）が2つ以上なら複勝、3つ以上なら単勝も。"
+             "検証は[experiments/strategies.md](https://github.com/hishiki-taisei/keiba-sim/blob/main/experiments/strategies.md)と[rules.md](https://github.com/hishiki-taisei/keiba-sim/blob/main/experiments/rules.md)。", ""]
     if s.empty:
         lines += ["まだ決着したベットはありません。"]
     else:
@@ -423,7 +489,7 @@ def report():
         dates = sorted(s["date"].unique())
         lines += [f"## 通算（{dates[0]}〜{dates[-1]}、{s['race_id'].nunique()}レース）", ""]
         lines += _strategy_table(s) + ["", "## 芝・ダート・障害別", ""] + _strategy_table(s, "surface")
-        lines += ["", "## 日ごと", "", "| 日付 | レース | " + " | ".join(f"{v} 回収率" for v in STRATEGIES.values()) + " |",
+        lines += ["", "## 日ごと", "", "| 日付 | レース | " + " | ".join(f"{g[:2]}：{v}" for g, v in STRATEGIES.values()) + " |",
                   "|---|---|" + "---|" * len(STRATEGIES)]
         for d in dates[::-1]:
             x = s[s["date"] == d]
@@ -439,7 +505,7 @@ def report():
             write_daily(d, b[b["date"] == d])
     trained = OUT / "train_log.csv"
     if trained.exists():
-        t = pd.read_csv(trained).tail(2)
+        t = pd.read_csv(trained).tail(4)
         lines += ["", "## いまのモデル", "", "毎晩、その日までの結果を足して学び直しています。", "",
                   "| 芝ダ | 学習した日時 | データの最終日 | 木の数 | 直近1年 対数損失 | 同 オッズ |", "|---|---|---|---|---|---|"]
         for _, r in t.iterrows():
@@ -459,13 +525,13 @@ def write_daily(day: str, b: pd.DataFrame):
     lines = [f"# {day} の仮想ベット", ""]
     if not s.empty:
         lines += _strategy_table(s.assign(payout=s["payout"].astype(float))) + [""]
-    lines += ["| レース | 発走 | 買い方 | 馬番 | 馬 | 勝率(モデル) | 賭けた時のオッズ | 着順 | 確定オッズ | 払戻 |",
+    lines += ["| レース | 発走 | 買い方 | 馬番 | 馬 | 勝率(その買い方のモデル) | 賭けた時のオッズ | 着順 | 確定オッズ | 払戻 |",
               "|---|---|---|---|---|---|---|---|---|---|"]
     for _, r in b.iterrows():
         pay = "" if not r["settled"] else _yen(float(r["payout"]))
         fo = "" if pd.isna(r["final_odds"]) else f"{float(r['final_odds']):.1f}"
         lines.append(f"| {r['venue']}{int(r['race_no'])}R {r['race_name']} | {r['post_time']} | "
-                     f"{STRATEGIES[r['strategy']]} | {int(r['number'])} | {r['horse_name']} | {float(r['p_model']):.1%} | "
+                     f"{'：'.join(STRATEGIES[r['strategy']])} | {int(r['number'])} | {r['horse_name']} | {float(r['p_model']):.1%} | "
                      f"{float(r['odds_at_bet']):.1f}（{r['odds_source']}） | {'' if pd.isna(r['finish']) else r['finish']} | {fo} | {pay} |")
     (OUT / "daily" / f"{day}.md").write_text("\n".join(lines) + "\n")
 
