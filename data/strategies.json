@@ -1,0 +1,60 @@
+{
+ "芝": [
+  {
+   "name": "ratio3.0_odds20_win",
+   "desc": "モデルの勝率がオッズの3.0倍以上、20倍未満",
+   "kind": "win",
+   "train_roi": 1.556,
+   "valid_roi": 1.198,
+   "test_roi": 1.2182,
+   "test_n": 307
+  },
+  {
+   "name": "edge2.0_odds20_win",
+   "desc": "モデルの勝率×オッズが2.0以上、20倍未満",
+   "kind": "win",
+   "train_roi": 1.4357,
+   "valid_roi": 1.0077,
+   "test_roi": 0.9876,
+   "test_n": 694
+  },
+  {
+   "name": "edge2.0_odds50_win",
+   "desc": "モデルの勝率×オッズが2.0以上、50倍未満",
+   "kind": "win",
+   "train_roi": 1.2085,
+   "valid_roi": 0.989,
+   "test_roi": 0.7714,
+   "test_n": 3081
+  }
+ ],
+ "ダ": [
+  {
+   "name": "ratio2.0_odds50_win",
+   "desc": "モデルの勝率がオッズの2.0倍以上、50倍未満",
+   "kind": "win",
+   "train_roi": 1.12,
+   "valid_roi": 0.8559,
+   "test_roi": 0.8129,
+   "test_n": 5351
+  },
+  {
+   "name": "edge1.5_odds50_win",
+   "desc": "モデルの勝率×オッズが1.5以上、50倍未満",
+   "kind": "win",
+   "train_roi": 1.1182,
+   "valid_roi": 0.8501,
+   "test_roi": 0.8139,
+   "test_n": 6173
+  },
+  {
+   "name": "ratio3.0_odds50_place",
+   "desc": "モデルの勝率がオッズの3.0倍以上、50倍未満",
+   "kind": "place",
+   "train_roi": 0.8864,
+   "valid_roi": 0.8443,
+   "test_roi": 0.8462,
+   "test_n": 1712
+  }
+ ]
+}
