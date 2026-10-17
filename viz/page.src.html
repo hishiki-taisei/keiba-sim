@@ -1,0 +1,608 @@
+<title>競馬データ図鑑</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: 電光掲示板（オッズ板）の黒いカードを縦長ショートとして並べ、その下に明るい「データで遊ぶ」面を置く */
+:root {
+  --bg: #f1f4ef; --panel: #ffffff; --ink: #121813; --ink2: #47544b; --muted: #758279;
+  --line: #d7ded6; --accent: #19744a; --accent-soft: #d4ebdc; --hot: #c06d00;
+  --bar: #9fb5a7;
+  /* 掲示板カードは常に夜の色 */
+  --tote: #0b0e0c; --tote2: #151a17; --led: #ffb21a; --led-dim: #3b423d; --tote-ink: #f2efe6; --tote-sub: #9ba59e;
+  --display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", "Yu Gothic", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --dot: "DotGothic16", "Osaka-Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1210; --panel: #161c18; --ink: #edf2ec; --ink2: #b3beb6; --muted: #849088;
+    --line: #29312c; --accent: #4cc58b; --accent-soft: #1d3a2b; --hot: #ffb21a; --bar: #4c5f53;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1210; --panel: #161c18; --ink: #edf2ec; --ink2: #b3beb6; --muted: #849088;
+  --line: #29312c; --accent: #4cc58b; --accent-soft: #1d3a2b; --hot: #ffb21a; --bar: #4c5f53;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; line-height: 1.25; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* hero */
+.hero { background: var(--tote); color: var(--tote-ink); }
+.hero .wrap { padding-block: 40px 28px; display: grid; gap: 22px; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--tote-sub); }
+.hero h1 { font-size: clamp(34px, 7vw, 64px); }
+.hero h1 em { font-style: normal; color: var(--led); }
+.hero p { margin: 0; max-width: 60ch; color: #cfd6d0; }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 2px; background: #222924; border: 2px solid #222924; border-radius: 6px; overflow: hidden; }
+.board div { background: var(--tote2); padding: 10px 14px; display: grid; }
+.board b { font-family: var(--dot); font-weight: 400; color: var(--led); font-size: clamp(24px, 4vw, 34px); line-height: 1.2; text-shadow: 0 0 10px rgba(255,178,26,.35); }
+.board span { font-size: 12px; color: var(--tote-sub); }
+nav.jump { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.jump a { color: var(--tote-ink); text-decoration: none; border: 1px solid #39423c; padding: 4px 12px; border-radius: 99px; font-size: 13px; }
+nav.jump a:hover, nav.jump a:focus-visible { border-color: var(--led); color: var(--led); outline: none; }
+
+section { padding-block: 44px 8px; }
+.sec-head { display: grid; gap: 6px; margin-bottom: 22px; }
+.sec-head h2 { font-size: clamp(24px, 4vw, 34px); }
+.sec-head p { margin: 0; color: var(--ink2); max-width: 66ch; }
+
+/* shorts cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 28px 20px; }
+.cell { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card { container-type: inline-size; aspect-ratio: 9 / 16; width: 100%; max-width: 100%; background: var(--tote); color: var(--tote-ink); border-radius: 14px; overflow: hidden; position: relative; }
+.card > .ci { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 8cqw 7cqw 6cqw; gap: 3.5cqw;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.045) 1px, transparent 1.4px); background-size: 3.2cqw 3.2cqw; }
+.card .tag { align-self: flex-start; font-size: 3.6cqw; letter-spacing: .12em; color: var(--tote); background: var(--led); padding: .4cqw 2.4cqw; border-radius: 1cqw; font-weight: 700; }
+.card h3 { font-size: 7.6cqw; line-height: 1.32; word-break: auto-phrase; }
+.card h3 em { font-style: normal; color: var(--led); }
+.card .big { font-family: var(--dot); color: var(--led); font-size: 15cqw; line-height: 1.05; text-shadow: 0 0 3cqw rgba(255,178,26,.35); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.card .big.s { font-size: 11.5cqw; }
+.card .sub { font-size: 4.1cqw; color: #d5dbd6; line-height: 1.55; }
+.card .viz { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.card .viz svg { width: 100%; height: auto; max-height: 100%; display: block; overflow: visible; }
+.card .note { font-size: 3.1cqw; color: var(--tote-sub); border-top: 1px solid #2a312c; padding-top: 2.4cqw; }
+.card .brand { position: absolute; top: 8.4cqw; right: 7cqw; font-size: 3.1cqw; color: var(--tote-sub); letter-spacing: .1em; }
+.tx { fill: var(--tote-sub); font-family: var(--body); }
+.tx.hi { fill: var(--led); font-family: var(--dot); }
+.tx.w { fill: var(--tote-ink); }
+.gb { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .8s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); }
+.gh { transform-box: fill-box; transform-origin: 0 50%; transition: transform .8s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); }
+.fade { transition: opacity .5s ease var(--d, 0ms); }
+.ln { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 2.6s cubic-bezier(.4,0,.2,1); }
+.reset .gb { transform: scaleY(0); transition: none; }
+.reset .gh { transform: scaleX(0); transition: none; }
+.reset .fade { opacity: 0; transition: none; }
+.reset .ln { stroke-dashoffset: 1; transition: none; }
+.horses { display: grid; gap: 2cqw; }
+.horses div { display: grid; grid-template-columns: 9cqw 1fr auto; align-items: center; gap: 2.4cqw; font-size: 4.6cqw; background: var(--tote2); border: 1px solid #262d28; border-radius: 1.6cqw; padding: 1.6cqw 2.4cqw; }
+.horses i { font-style: normal; font-family: var(--dot); color: var(--led); font-size: 5.6cqw; text-align: center; }
+.horses small { color: var(--tote-sub); font-size: 3.6cqw; }
+.ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+button, select { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+button.primary:hover { color: var(--panel); filter: brightness(1.08); }
+button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+
+/* 縦型プレビュー */
+.stage { position: fixed; inset: 0; z-index: 50; background: #000; display: grid; place-items: center; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.stage .card { width: min(100vw, calc((100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 9 / 16)); border-radius: 0; }
+.stage .x { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); background: rgba(255,255,255,.12); color: #fff; border: 0; font-size: 13px; z-index: 2; }
+.stage .x:hover { background: rgba(255,255,255,.24); color: #fff; }
+
+/* 勝ち星レース */
+.race-layout { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.race-side { display: grid; gap: 14px; min-width: 0; }
+.race-side p { margin: 0; color: var(--ink2); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.bcr { position: relative; flex: 1; min-height: 0; }
+.bcr .row { position: absolute; left: 0; right: 0; height: var(--rh, 7.4cqw); display: flex; align-items: center; transition: transform .45s ease; }
+.bcr .row .lab { width: 34cqw; flex: none; font-size: 3.7cqw; text-align: right; padding-right: 2cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bcr .row .bw { flex: 1; position: relative; height: 72%; margin-right: 12cqw; }
+.bcr .row .b { height: 100%; background: var(--led-dim); border-radius: 0 1cqw 1cqw 0; transition: width .45s linear; min-width: 2px; }
+.bcr .row.lead .b { background: var(--led); }
+.bcr .row .v { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--dot); font-size: 4cqw; color: var(--tote-ink); padding-left: 1.6cqw; transition: left .45s linear; white-space: nowrap; }
+.bcr .row.lead .v { color: var(--led); }
+.bcr-when { font-family: var(--dot); color: var(--led); font-size: 13cqw; line-height: 1; text-align: right; }
+
+/* データで遊ぶ */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 14px; display: grid; gap: 10px; min-width: 0; align-content: start; }
+.panel h3 { font-family: var(--body); font-weight: 700; font-size: 17px; }
+.panel .lead { margin: 0; color: var(--ink2); font-size: 14px; }
+.panel .lead b { color: var(--accent); }
+.panel svg { width: 100%; height: auto; display: block; overflow: visible; }
+.panel .src { font-size: 12px; color: var(--muted); margin: 0; }
+.ax { fill: var(--muted); font-size: 11px; font-family: var(--body); }
+.axv { fill: var(--ink2); font-size: 11px; font-family: var(--body); font-variant-numeric: tabular-nums; }
+.grid line { stroke: var(--line); }
+.ref { stroke: var(--ink2); stroke-dasharray: 3 3; }
+.bp { fill: var(--bar); }
+.bp.hi { fill: var(--accent); }
+.hit { fill: transparent; cursor: default; }
+.hit:hover + .bp, .bp:hover { filter: brightness(1.15); }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); font-size: 12px; }
+td.r, th.r { text-align: right; }
+.chip { display: inline-block; min-width: 2.6em; text-align: center; border-radius: 99px; padding: 0 8px; font-size: 12px; background: var(--accent-soft); color: var(--ink); }
+.chip.fav { background: var(--accent); color: var(--panel); }
+.inbar { display: inline-block; height: 8px; border-radius: 0 3px 3px 0; background: var(--accent); vertical-align: middle; margin-right: 6px; }
+.tip { position: fixed; z-index: 60; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 10px; border-radius: 6px; max-width: 260px; line-height: 1.5; opacity: 0; transition: opacity .12s; }
+.tip.on { opacity: 1; }
+footer { padding-block: 40px 56px; color: var(--muted); font-size: 12.5px; }
+footer p { margin: 0 0 6px; max-width: 80ch; }
+
+@media (max-width: 820px) { .race-layout { grid-template-columns: 1fr; } .race-layout .cell { max-width: 400px; } }
+@media (prefers-reduced-motion: reduce) {
+  .gb, .gh, .fade, .ln, .bcr .row, .bcr .row .b, .bcr .row .v { transition: none !important; }
+}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">JRA 全レース 2015.1 — 2026.10</div>
+    <h1>数字で見る、<em>11年分</em>の競馬</h1>
+    <p>集めたJRAの全レース結果から、思わず人に話したくなる数字を抜き出しました。黒いカードは縦長9:16なので、「縦型で再生」で全画面にして画面収録すれば、そのままショート動画の素材になります。</p>
+    <div class="board" id="board"></div>
+    <nav class="jump" aria-label="ページ内リンク">
+      <a href="#shorts">ショートのネタ帳</a><a href="#race">勝ち星レース</a><a href="#play">データで遊ぶ</a><a href="#kikka">菊花賞の11年</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="shorts">
+    <div class="sec-head">
+      <h2>ショートのネタ帳</h2>
+      <p>1枚で1ネタ。「▶ 再生」で数字とグラフが動き、「縦型で再生」で全画面の9:16になります。数字はすべてこのデータからの集計です。</p>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="race">
+    <div class="sec-head">
+      <h2>勝ち星レース</h2>
+      <p>2015年1月からの通算勝利数を1か月ずつ積み上げます。騎手と種牡馬（父馬）を切り替えられます。</p>
+    </div>
+    <div class="race-layout">
+      <div class="cell" id="raceCell"></div>
+      <div class="race-side">
+        <div class="ctrl" role="group" aria-label="ランキングの種類">
+          <button id="rjBtn" aria-pressed="true">騎手</button>
+          <button id="rsBtn" aria-pressed="false">種牡馬</button>
+        </div>
+        <label for="raceSlider" class="eyebrow" style="color:var(--muted)">月を動かす</label>
+        <input type="range" id="raceSlider" min="0" value="0">
+        <p id="raceNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="play">
+    <div class="sec-head">
+      <h2>データで遊ぶ</h2>
+      <p>カードのネタの元になった集計を、条件を変えながら見られます。棒にカーソルを合わせると件数が出ます。</p>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>コース別・枠番ごとの勝率</h3>
+        <label for="courseSel" class="src">コース（14頭立て以上、150レース以上あるコース）</label>
+        <select id="courseSel"></select>
+        <p class="lead" id="frameLead"></p>
+        <div id="frameChart"></div>
+        <p class="src">枠の色はJRAの帽子の色。1頭あたりの勝率なので、頭数の多い7・8枠も公平に比べています。</p>
+      </div>
+      <div class="panel">
+        <h3>人気ごとの勝率と回収率</h3>
+        <div class="ctrl" role="group" aria-label="指標">
+          <button id="pWin" aria-pressed="true">勝率</button>
+          <button id="pTop3" aria-pressed="false">3着内率</button>
+          <button id="pRoi" aria-pressed="false">単勝回収率</button>
+        </div>
+        <p class="lead" id="popLead"></p>
+        <div id="popChart"></div>
+        <p class="src">単勝回収率は、その人気の馬の単勝を全部100円ずつ買ったときの払戻の割合。点線が100%（収支トントン）。</p>
+      </div>
+      <div class="panel">
+        <h3>馬場が悪いと荒れるのか</h3>
+        <p class="lead">芝は馬場が悪くなるほど1番人気が勝てなくなり、10万円以上の三連単が増えます。ダートはほとんど変わりません。</p>
+        <div class="tbl-wrap"><table id="goingTbl"></table></div>
+      </div>
+      <div class="panel">
+        <h3>競馬場ごとの「逃げ馬」の勝率</h3>
+        <p class="lead">最初のコーナーを先頭で回った馬が勝った割合。どこでも全体の勝率（約7%）の2倍以上。函館のダートでは3割近くが逃げ切ります。</p>
+        <div class="tbl-wrap"><table id="nigeTbl"></table></div>
+      </div>
+      <div class="panel">
+        <h3>年齢ごとの勝率</h3>
+        <p class="lead">4歳がピーク。5歳から目に見えて下がります（障害レースを除く）。</p>
+        <div id="ageChart"></div>
+      </div>
+      <div class="panel">
+        <h3>前走からの馬体重の増減と勝率</h3>
+        <p class="lead">前走から±3kgの馬がいちばん勝ちます。大きく減っても、大きく増えても勝率は下がります。</p>
+        <div id="bwdChart"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="kikka">
+    <div class="sec-head">
+      <h2>菊花賞の11年</h2>
+      <p>京都 芝3000m。このプロジェクトが予想を目指している菊花賞の、2015年からの勝ち馬です（2021〜2022年は阪神開催）。</p>
+    </div>
+    <div class="panel"><div class="tbl-wrap"><table id="kikkaTbl"></table></div></div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>データ：netkeiba のレース結果ページから集めた JRA 全レース（2015年1月4日〜2026年10月12日、40,732レース）。取消・除外・中止は着順の集計から除いています。</p>
+  <p>払戻・オッズは確定時のもの。「史上最高」などの表現はこの期間のデータの中での記録です。</p>
+</footer>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const D = /*DATA*/null;
+const $ = s => document.querySelector(s);
+const fmt = (n, d = 0) => Number(n).toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const JNAME = { 'Ｃ．デム': 'C.デムーロ', 'Ｍ．デム': 'M.デムーロ', 'バルジュ': 'バルジュー' };
+const jn = s => JNAME[s] || s;
+const FRAME = ['#ffffff', '#1d1d1d', '#e60012', '#0068b7', '#ffe100', '#00a650', '#f39800', '#f5a6c6'];
+const ymd = s => { const [y, m, d] = s.split('-'); return `${y}年${+m}月${+d}日`; };
+
+/* ---------- hero board ---------- */
+$('#board').innerHTML = [
+  [D.hero.races, 'レース'], [D.hero.runs, '出走（のべ頭数）'], [D.hero.horses, '頭の馬'], [D.hero.payouts, '件の払戻']
+].map(([v, l]) => `<div><b class="cu" data-to="${v}">${fmt(v)}</b><span>${l}</span></div>`).join('');
+
+/* ---------- count up ---------- */
+function countUp(el) {
+  const to = +el.dataset.to, dec = +(el.dataset.dec || 0), pre = el.dataset.pre || '', suf = el.dataset.suf || '';
+  const show = v => el.textContent = pre + fmt(v, dec) + suf;
+  if (reduce) return show(to);
+  const t0 = performance.now(), dur = +(el.dataset.dur || 1400);
+  (function step(t) { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); show(to * e); if (p < 1) requestAnimationFrame(step); })(t0);
+}
+const big = (to, o = {}) => `<div class="big ${o.s ? 's' : ''}" data-to="${to}" data-dec="${o.dec || 0}" data-pre="${o.pre || ''}" data-suf="${o.suf || ''}">${o.pre || ''}${fmt(to, o.dec || 0)}${o.suf || ''}</div>`;
+
+/* ---------- card chart helpers (dark tote board) ---------- */
+function vbars(vals, labels, { hi = [], fmtv = v => v, valsAt = null, colors = null, h = 150, w = 300, max = null, stroke = false } = {}) {
+  const n = vals.length, gap = Math.max(3, 60 / n), bw = (w - gap * (n - 1)) / n, top = 22, bot = 20, ph = h - top - bot;
+  const M = max || Math.max(...vals);
+  const showAt = valsAt || hi;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img">`;
+  vals.forEach((v, i) => {
+    const x = i * (bw + gap), bh = Math.max(1.5, v / M * ph), y = top + ph - bh, on = hi.includes(i);
+    const fill = colors ? colors[i] : (on ? 'var(--led)' : 'var(--led-dim)');
+    s += `<rect class="gb" style="--d:${i * 55}ms" x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${Math.min(3, bw / 4)}" fill="${fill}" ${stroke ? 'stroke="#58615b" stroke-width="1"' : ''}/>`;
+    if (showAt.includes(i)) s += `<text class="tx ${on ? 'hi' : 'w'} fade" style="--d:${500 + i * 55}ms" x="${x + bw / 2}" y="${y - 6}" text-anchor="middle" font-size="${n > 10 ? 11 : 13}">${fmtv(v)}</text>`;
+    s += `<text class="tx" x="${x + bw / 2}" y="${h - 4}" text-anchor="middle" font-size="${n > 10 ? 9.5 : 11}">${labels[i]}</text>`;
+  });
+  return s + '</svg>';
+}
+function hbars(rows, { w = 300, rowH = 26, labW = 112, fmtv = v => v, hi = [0] } = {}) {
+  const M = Math.max(...rows.map(r => r.v)), h = rows.length * rowH;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img">`;
+  rows.forEach((r, i) => {
+    const y = i * rowH, bw = (w - labW - 56) * r.v / M, on = hi.includes(i);
+    s += `<text class="tx ${on ? 'w' : ''}" x="${labW - 6}" y="${y + rowH / 2 + 4}" text-anchor="end" font-size="11.5">${esc(r.l)}</text>`;
+    s += `<rect class="gh" style="--d:${i * 80}ms" x="${labW}" y="${y + 5}" width="${bw}" height="${rowH - 10}" rx="3" fill="${on ? 'var(--led)' : 'var(--led-dim)'}"/>`;
+    s += `<text class="tx ${on ? 'hi' : 'w'} fade" style="--d:${600 + i * 80}ms" x="${labW + bw + 5}" y="${y + rowH / 2 + 4}" font-size="12">${fmtv(r.v)}</text>`;
+  });
+  return s + '</svg>';
+}
+
+/* ---------- the shorts ---------- */
+const odds11 = D.odds[0];
+const fav = D.fav, favLoss = fav.ret - fav.stake;
+const t1 = D.top3t[0], up = D.upsets[0];
+const niigata = D.frames.find(f => f.c === '新潟 芝1000m');
+const nRatio = niigata.f[7] / niigata.f[0];
+const jd = D.jday.find(d => d.date === '2016-11-06') || D.jday[0];
+const jdRides = D.jday_rides[`${jd.date}|${jd.jockey_name}`];
+const turf = D.going.filter(g => g.s === '芝');
+const rn11 = D.raceno.find(r => r.r === 11), rn1 = D.raceno.find(r => r.r === 1);
+const ORDER = ['逃げ', '先行', '差し', '追込'];
+const dirtStyle = ORDER.map(st => D.style.find(x => x.s === 'ダ' && x.st === st));
+const turfStyle = ORDER.map(st => D.style.find(x => x.s === '芝' && x.st === st));
+const [heavy, light] = D.bw_ext;
+const swan = D.no_win[0], ojuu = D.most_wins[0];
+const kikkaFav = D.kikka.filter(k => k.pop === 1).length;
+const bwMax = D.bw.reduce((m, b, i, a) => b.win > a[m].win ? i : m, 0);
+const l3 = D.l3f.find(x => x.s === '芝'), l3d = D.l3f.find(x => x.s === 'ダ');
+const age4 = D.age.find(a => a.a === 4), age7 = D.age.find(a => a.a === 7);
+const n3 = D.namelen.filter(x => x.l >= 3).map(x => x.win);
+
+function dotsRow(n, lit, perRow, y0, w = 300) {
+  const step = w / perRow, r = step * .36; let s = '';
+  for (let i = 0; i < n; i++) {
+    const cx = (i % perRow) * step + step / 2, cy = y0 + Math.floor(i / perRow) * step + step / 2;
+    s += `<circle class="fade" style="--d:${i * 22}ms" cx="${cx}" cy="${cy}" r="${r}" fill="${i < lit ? 'var(--led)' : 'var(--led-dim)'}"/>`;
+  }
+  return s;
+}
+function favLine() {
+  const S = fav.series, w = 300, h = 150, top = 14, bot = 22;
+  const vals = S.map(d => d[1]), mn = Math.min(0, ...vals), mx = Math.max(0, ...vals);
+  const X = i => i / (S.length - 1) * (w - 8), Y = v => top + (mx - v) / (mx - mn) * (h - top - bot);
+  const pts = S.map((d, i) => `${X(i).toFixed(1)},${Y(d[1]).toFixed(1)}`).join(' ');
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img"><line x1="0" x2="${w}" y1="${Y(0)}" y2="${Y(0)}" stroke="#4a524c" stroke-dasharray="3 3"/>`;
+  s += `<text class="tx" x="2" y="${Y(0) - 5}" font-size="10.5">±0円</text>`;
+  s += `<polyline class="ln" pathLength="1" points="${pts}" fill="none" stroke="var(--led)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  const last = S.length - 1;
+  s += `<circle class="fade" style="--d:2400ms" cx="${X(last)}" cy="${Y(vals[last])}" r="4" fill="var(--led)" stroke="var(--tote)" stroke-width="2"/>`;
+  [0, S.findIndex(d => d[0].startsWith('2020')), S.findIndex(d => d[0].startsWith('2025'))].forEach(i => s += `<text class="tx" x="${X(i)}" y="${h - 4}" font-size="10.5" text-anchor="${i ? 'middle' : 'start'}">${S[i][0].slice(0, 4)}</text>`);
+  return s + '</svg>';
+}
+
+const CARDS = [
+  { tag: '単勝オッズ', h: `単勝<em>1.1倍</em>の大本命でも、5回に1回は負ける`,
+    big: big(Math.round((1 - odds11.win / 100) * 1000) / 10, { dec: 1, suf: '%' }),
+    sub: `単勝1.1倍で走った${D.odds11_n}頭のうち、${D.lost11_n}頭が勝てなかった。`,
+    viz: vbars(D.odds.map(o => o.win), D.odds.map(o => o.o.toFixed(1)), { hi: [0], valsAt: [0, D.odds.length - 1], fmtv: v => v.toFixed(0) + '%', max: 100 }),
+    note: '単勝オッズ別の勝率（1.1倍〜2.0倍）' },
+  { tag: '1番人気', h: `1番人気を<em>全レース</em>100円ずつ買い続けたら`,
+    big: big(favLoss, { suf: '円', s: true }),
+    sub: `${fmt(fav.n)}レースで${fmt(fav.stake)}円使って、戻りは${fmt(fav.ret)}円。回収率${(fav.ret / fav.stake * 100).toFixed(1)}%。`,
+    viz: favLine(), note: '収支の推移（2015年1月〜2026年10月）' },
+  { tag: '三連単', h: `100円が<em>5,836万円</em>になった三連単`,
+    big: big(t1.payout, { suf: '円', s: true }),
+    sub: `${ymd(t1.date)} ${t1.venue}${t1.race_no}R ${t1.name}。${fmt(t1.n * (t1.n - 1) * (t1.n - 2))}通り中${fmt(t1.pop)}番人気。`,
+    viz: `<div class="horses">${t1.horses.map((x, i) => `<div class="fade" style="--d:${300 + i * 350}ms"><i>${i + 1}着</i><span>${esc(x.name)}</span><small>${x.pop}番人気</small></div>`).join('')}</div>`,
+    note: '100円が58万倍。18番人気・17番人気・10番人気の順で入線' },
+  { tag: '大穴', h: `単勝<em>549.4倍</em>で勝った馬がいる`,
+    big: big(Math.round(up.odds * 100), { suf: '円' }),
+    sub: `100円が${fmt(Math.round(up.odds * 100))}円に。${ymd(up.date)} ${up.venue}${up.race_no}R、${up.n_runners}頭立て最低人気の「${up.horse_name}」。`,
+    viz: hbars(D.upsets.slice(0, 5).map(u => ({ l: u.horse_name, v: u.odds })), { fmtv: v => v.toFixed(1) + '倍' }),
+    note: '勝ち馬の単勝オッズ 上位5頭' },
+  { tag: '枠順', h: `新潟の直線1000mは<em>8枠が1枠の${nRatio.toFixed(1)}倍</em>勝つ`,
+    big: big(Math.round(nRatio * 10) / 10, { dec: 1, pre: '×' }),
+    sub: `外ラチ沿いを走れる外枠が圧倒的。8枠の勝率${niigata.f[7].toFixed(1)}%、1枠は${niigata.f[0].toFixed(1)}%。`,
+    viz: vbars(niigata.f, ['1', '2', '3', '4', '5', '6', '7', '8'].map(x => x + '枠'), { hi: [], valsAt: [0, 7], colors: FRAME, stroke: true, fmtv: v => v.toFixed(1) + '%' }),
+    note: `新潟 芝1000m・14頭以上の${niigata.races}レース・枠ごとの1頭あたり勝率` },
+  { tag: '騎手', h: `1日で<em>8勝</em>した騎手がいる`,
+    big: big(jd.n, { suf: '勝' }),
+    sub: `${jn(jd.jockey_name)}、${ymd(jd.date)} ${jd.venue}。${jdRides}鞍に乗って${jd.n}勝、勝率${Math.round(jd.n / jdRides * 100)}%。`,
+    viz: `<svg viewBox="0 0 300 70" role="img">${dotsRow(jdRides, jd.n, 10, 6)}<text class="tx" x="0" y="66" font-size="11">● 1鞍＝1つ。光っているのが勝ったレース</text></svg>`,
+    note: `1日7勝以上はこの11年で${D.jday.filter(d => d.n >= 7).length}回、すべてルメール` },
+  { tag: '馬場状態', h: `芝の<em>不良馬場</em>は荒れる`,
+    big: big(turf[3].big, { dec: 1, suf: '%' }),
+    sub: `10万円以上の三連単が出た割合。良馬場は${turf[0].big}%。1番人気の勝率も${turf[0].fav}%→${turf[3].fav}%に下がる。`,
+    viz: vbars(turf.map(g => g.big), turf.map(g => g.g), { hi: [3], valsAt: [0, 1, 2, 3], fmtv: v => v.toFixed(1) + '%', max: 40 }),
+    note: '芝のレース・馬場状態別 三連単10万円以上の割合' },
+  { tag: 'レース番号', h: `1日でいちばん荒れるのは<em>11R</em>`,
+    big: big(rn11.big, { dec: 1, suf: '%' }),
+    sub: `三連単が10万円を超えた割合。1Rは${rn1.big}%。11Rはその日のメインレースで、多頭数の実力拮抗戦が多い。`,
+    viz: vbars(D.raceno.map(r => r.big), D.raceno.map(r => r.r), { hi: [10], valsAt: [0, 10], fmtv: v => v.toFixed(0) + '%' }),
+    note: 'レース番号別 三連単10万円以上の割合' },
+  { tag: '脚質', h: `ダートで<em>逃げた馬</em>は5頭に1頭が勝つ`,
+    big: big(dirtStyle[0].win, { dec: 1, suf: '%' }),
+    sub: `後ろから行く「追込」は${dirtStyle[3].win.toFixed(1)}%。差は8倍。芝でも逃げは${turfStyle[0].win.toFixed(1)}%。`,
+    viz: vbars(dirtStyle.map(x => x.win), ORDER, { hi: [0], valsAt: [0, 1, 2, 3], fmtv: v => v.toFixed(1) + '%' }),
+    note: 'ダート・最初のコーナーの位置で分けた勝率' },
+  { tag: '馬体重', h: `<em>600kg</em>の馬も<em>338kg</em>の馬も勝っている`,
+    big: big(heavy.body_weight - light.body_weight, { suf: 'kg差' }),
+    sub: `最重量の勝ち馬は${heavy.horse_name}（${heavy.body_weight}kg）、最軽量は${light.horse_name}（${light.body_weight}kg）。全体では重い馬ほどよく勝つ。`,
+    viz: vbars(D.bw.map(b => b.win), D.bw.map(b => b.b.startsWith('〜') || b.b.endsWith('〜') ? b.b : b.b.split('〜')[0]), { hi: [bwMax], valsAt: [0, bwMax], fmtv: v => v.toFixed(1) + '%' }),
+    note: '馬体重別の勝率（kg、障害を除く）' },
+  { tag: '記録', h: `<em>74戦</em>して一度も勝てなかった馬`,
+    big: big(swan.n, { suf: '戦0勝' }),
+    sub: `${swan.horse_name}は3着以内も0回。対して${ojuu.horse_name}は${ojuu.n}戦${ojuu.wins}勝。`,
+    viz: `<svg viewBox="0 0 300 152" role="img"><text class="tx w" x="0" y="11" font-size="11.5">${esc(swan.horse_name)}</text>${dotsRow(swan.n, 0, 25, 16)}<text class="tx w" x="0" y="91" font-size="11.5">${esc(ojuu.horse_name)}</text>${dotsRow(ojuu.n, ojuu.wins, 25, 96)}</svg>`,
+    note: '● 1レース＝1つ。光っているのが勝利（2015年以降のJRA）' },
+  { tag: '馬名', h: `馬名の文字数で勝率は<em>変わる？</em>`,
+    big: `<div class="big s">ほぼ同じ</div>`,
+    sub: `3〜9文字はどれも${Math.min(...n3).toFixed(1)}〜${Math.max(...n3).toFixed(1)}%。2文字だけ${D.namelen[0].win}%と低いが、対象は${fmt(D.namelen[0].n)}走と少なめ。`,
+    viz: vbars(D.namelen.map(x => x.win), D.namelen.map(x => x.l + '字'), { hi: [], valsAt: D.namelen.map((_, i) => i), fmtv: v => v.toFixed(1), max: 10 }),
+    note: '馬名の文字数別の勝率（%）' },
+  { tag: '上がり3F', h: `ゴール前の600mが<em>いちばん速かった馬</em>は？`,
+    big: big(l3.win, { dec: 1, suf: '%' }),
+    sub: `芝で上がり3ハロン最速だった馬の勝率。3着以内なら${l3.top3}%。ダートでは勝率${l3d.win}%。`,
+    viz: vbars([D.hero.races / D.hero.runs * 100, l3.win, l3.top3], ['全体の勝率', '最速馬の勝率', '最速馬の3着内率'], { hi: [1, 2], valsAt: [0, 1, 2], fmtv: v => v.toFixed(1) + '%', max: 80 }),
+    note: '芝・上がり3F最速が1頭だけのレース' },
+  { tag: '三連単', h: `<em>100万円</em>を超えた三連単は何回？`,
+    big: big(D.t3_over1m, { suf: '回' }),
+    sub: `${fmt(D.t3count)}レースのうち${(D.t3_over1m / D.t3count * 100).toFixed(1)}%。1年に約80回のペースで出ている。三連単の払戻の中央値は${fmt(D.t3_median)}円。`,
+    viz: hbars(D.top3t.slice(0, 5).map(t => ({ l: `${t.date.slice(0, 4)} ${t.venue}${t.race_no}R`, v: t.payout / 10000 })), { fmtv: v => fmt(Math.round(v)) + '万' }),
+    note: '三連単の払戻 上位5レース（万円）' },
+  { tag: '年齢', h: `競走馬のピークは<em>4歳</em>`,
+    big: big(age4.win, { dec: 1, suf: '%' }),
+    sub: `4歳の勝率がいちばん高く、5歳から下がり始めて7歳では${age7.win}%。`,
+    viz: vbars(D.age.map(a => a.win), D.age.map(a => a.a + '歳'), { hi: [2], valsAt: [0, 2, D.age.length - 1], fmtv: v => v.toFixed(1) + '%' }),
+    note: '年齢別の勝率（障害を除く）' },
+  { tag: '菊花賞', h: `菊花賞の1番人気は<em>11年で${kikkaFav}勝</em>`,
+    big: big(kikkaFav, { suf: ` / ${D.kikka.length}` }),
+    sub: `勝ち馬の人気は最低で7番人気（フィエールマン）。2017年の不良馬場では三連単${fmt(D.kikka.find(k => k.year === 2017).t3)}円。`,
+    viz: vbars(D.kikka.map(k => k.pop), D.kikka.map(k => "'" + String(k.year).slice(2)), { hi: D.kikka.map((k, i) => k.pop === 1 ? i : -1).filter(i => i >= 0), valsAt: D.kikka.map((_, i) => i), fmtv: v => v + '', max: 8 }),
+    note: '年ごとの勝ち馬の人気（棒が低いほど人気馬）' },
+];
+
+function cardHTML(c) {
+  return `<div class="ci"><span class="tag">${c.tag}</span><span class="brand">競馬データ図鑑</span><h3>${c.h}</h3>${c.big}<div class="sub">${c.sub}</div><div class="viz">${c.viz}</div><div class="note">${c.note} ／ JRA 2015–2026</div></div>`;
+}
+function play(card) {
+  card.classList.add('reset'); void card.offsetWidth;
+  requestAnimationFrame(() => { card.classList.remove('reset'); card.querySelectorAll('.big[data-to]').forEach(countUp); });
+}
+function openStage(card, onOpen) {
+  const st = document.createElement('div'); st.className = 'stage';
+  const x = document.createElement('button'); x.className = 'x'; x.textContent = '閉じる ✕';
+  const clone = card.cloneNode(true); st.append(clone, x); document.body.append(st);
+  const close = () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); st.remove(); document.removeEventListener('keydown', onKey); if (st._stop) st._stop(); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  x.onclick = close; document.addEventListener('keydown', onKey);
+  document.addEventListener('fullscreenchange', function f() { if (!document.fullscreenElement) { document.removeEventListener('fullscreenchange', f); if (st.isConnected) close(); } });
+  try { const p = st.requestFullscreen && st.requestFullscreen(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  x.focus();
+  setTimeout(() => onOpen ? onOpen(clone, st) : play(clone), 350);
+}
+const cardsEl = $('#cards');
+CARDS.forEach(c => {
+  const cell = document.createElement('div'); cell.className = 'cell';
+  const card = document.createElement('article'); card.className = 'card'; card.innerHTML = cardHTML(c);
+  card.setAttribute('aria-label', c.h.replace(/<[^>]+>/g, ''));
+  const ctl = document.createElement('div'); ctl.className = 'ctrl';
+  const b1 = document.createElement('button'); b1.textContent = '▶ 再生'; b1.onclick = () => play(card);
+  const b2 = document.createElement('button'); b2.textContent = '縦型で再生'; b2.onclick = () => openStage(card);
+  ctl.append(b1, b2); cell.append(card, ctl); cardsEl.append(cell);
+});
+
+/* ---------- bar chart race ---------- */
+const RACE = { j: D.race_jockey, s: D.race_sire };
+let rk = 'j', ri = 0, timer = null;
+const raceCell = $('#raceCell');
+raceCell.innerHTML = `<article class="card" id="raceCard"><div class="ci"><span class="tag" id="raceTag">騎手</span><span class="brand">競馬データ図鑑</span><h3 id="raceH"></h3><div class="bcr-when" id="raceWhen"></div><div class="bcr" id="bcr"></div><div class="note" id="raceFoot"></div></div></article>
+<div class="ctrl"><button class="primary" id="racePlay">▶ 再生</button><button id="raceStage">縦型で再生</button></div>`;
+const slider = $('#raceSlider');
+function buildRace(root) {
+  const R = RACE[rk], bcr = root.querySelector('.bcr');
+  bcr.innerHTML = R.names.map((n, i) => `<div class="row" data-i="${i}"><div class="lab">${esc(rk === 'j' ? jn(n) : n)}</div><div class="bw"><div class="b"></div><span class="v num">0</span></div></div>`).join('');
+  root.querySelector('#raceTag, .tag').textContent = rk === 'j' ? '騎手' : '種牡馬';
+  root.querySelector('h3').innerHTML = rk === 'j' ? '通算<em>勝利数</em>が多い騎手' : '産駒の<em>勝利数</em>が多い種牡馬';
+  root.querySelector('.note').textContent = (rk === 'j' ? 'JRA平地・障害の1着回数' : '父馬ごとの産駒の1着回数') + ' 上位10 ／ JRA 2015–2026';
+}
+function drawRace(root, i) {
+  const R = RACE[rk], vals = R.values.map(v => v[i]);
+  const order = vals.map((v, k) => [v, k]).sort((a, b) => b[0] - a[0]);
+  const M = Math.max(1, order[0][0]), rows = root.querySelectorAll('.bcr .row');
+  const bcr = root.querySelector('.bcr'), rowH = Math.min(bcr.clientHeight / 10.4, bcr.clientWidth * 0.11) || 26;
+  bcr.style.setProperty('--rh', rowH + 'px');
+  const rank = {}; order.forEach(([, k], r) => rank[k] = r);
+  rows.forEach(row => {
+    const k = +row.dataset.i, r = rank[k], v = vals[k];
+    row.style.transform = `translateY(${Math.min(r, 11) * rowH}px)`;
+    row.style.opacity = r < 10 ? 1 : 0;
+    row.classList.toggle('lead', r === 0);
+    const pct = v / M * 100;
+    row.querySelector('.b').style.width = pct + '%';
+    const vEl = row.querySelector('.v'); vEl.textContent = fmt(v); vEl.style.left = pct + '%';
+  });
+  const m = R.months[i]; root.querySelector('.bcr-when').textContent = `${m.slice(0, 4)}.${m.slice(5)}`;
+}
+function setRaceKind(k) {
+  rk = k; stopRace(); $('#rjBtn').setAttribute('aria-pressed', k === 'j'); $('#rsBtn').setAttribute('aria-pressed', k === 's');
+  slider.max = RACE[k].months.length - 1; ri = +slider.max; slider.value = ri;
+  buildRace($('#raceCard')); drawRace($('#raceCard'), ri); raceNote();
+}
+function raceNote() {
+  const R = RACE[rk], last = R.months.length - 1, vals = R.values.map(v => v[last]);
+  const top = vals.map((v, k) => [v, R.names[k]]).sort((a, b) => b[0] - a[0]).slice(0, 3);
+  $('#raceNote').innerHTML = `${R.months[last].replace('-', '年')}月時点の1位は<b>${esc(rk === 'j' ? jn(top[0][1]) : top[0][1])}</b>（${fmt(top[0][0])}勝）。2位 ${esc(rk === 'j' ? jn(top[1][1]) : top[1][1])}（${fmt(top[1][0])}勝）、3位 ${esc(rk === 'j' ? jn(top[2][1]) : top[2][1])}（${fmt(top[2][0])}勝）。`;
+}
+function runRace(root, onTick, onEnd) {
+  let i = 0; const n = RACE[rk].months.length;
+  drawRace(root, 0);
+  const id = setInterval(() => { i++; if (i >= n) { clearInterval(id); onEnd && onEnd(); return; } drawRace(root, i); onTick && onTick(i); }, reduce ? 60 : 170);
+  return () => clearInterval(id);
+}
+function stopRace() { if (timer) { timer(); timer = null; } $('#racePlay').textContent = '▶ 再生'; }
+$('#racePlay').onclick = () => {
+  if (timer) return stopRace();
+  $('#racePlay').textContent = '■ 停止';
+  timer = runRace($('#raceCard'), i => { ri = i; slider.value = i; }, () => { timer = null; $('#racePlay').textContent = '▶ 再生'; });
+};
+slider.oninput = () => { stopRace(); ri = +slider.value; drawRace($('#raceCard'), ri); };
+$('#rjBtn').onclick = () => setRaceKind('j');
+$('#rsBtn').onclick = () => setRaceKind('s');
+$('#raceStage').onclick = () => { stopRace(); openStage($('#raceCard'), (clone, st) => { clone.removeAttribute('id'); setTimeout(() => { st._stop = runRace(clone); }, 50); }); };
+setRaceKind('j');
+addEventListener('resize', () => drawRace($('#raceCard'), +slider.value));
+
+/* ---------- explorer charts (theme-aware) ---------- */
+function bars(el, rows, { h = 240, fmtv = v => v, tip = r => '', colors = null, hi = [], ref = null, unit = '' } = {}) {
+  const w = 560, L = 40, B = 26, T = 18, ph = h - B - T, n = rows.length;
+  const M = Math.max(ref || 0, ...rows.map(r => r.v)) * 1.08;
+  const step = niceStep(M), gap = Math.max(4, 120 / n), bw = (w - L - gap * (n - 1)) / n;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img"><g class="grid">`;
+  for (let g = 0; g <= M; g += step) { const y = T + ph - g / M * ph; s += `<line x1="${L}" x2="${w}" y1="${y}" y2="${y}"/><text class="ax" x="${L - 6}" y="${y + 4}" text-anchor="end">${+g.toFixed(2)}${unit}</text>`; }
+  s += '</g>';
+  rows.forEach((r, i) => {
+    const x = L + i * (bw + gap), bh = Math.max(1.5, r.v / M * ph), y = T + ph - bh;
+    const fill = colors ? `style="fill:${colors[i]}" stroke="var(--muted)" stroke-width="1"` : '';
+    s += `<rect class="bp ${hi.includes(i) ? 'hi' : ''}" ${fill} x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${Math.min(4, bw / 4)}"/>`;
+    s += `<rect class="hit" data-tip="${esc(tip(r))}" x="${x - gap / 2}" y="${T}" width="${bw + gap}" height="${ph}"/>`;
+    if (n <= 12) s += `<text class="axv" x="${x + bw / 2}" y="${y - 5}" text-anchor="middle">${fmtv(r.v)}</text>`;
+    s += `<text class="ax" x="${x + bw / 2}" y="${h - 8}" text-anchor="middle">${esc(r.l)}</text>`;
+  });
+  if (ref) { const y = T + ph - ref / M * ph; s += `<line class="ref" x1="${L}" x2="${w}" y1="${y}" y2="${y}"/><text class="axv" x="${w}" y="${y - 5}" text-anchor="end">${ref}${unit}</text>`; }
+  el.innerHTML = s + '</svg>';
+}
+function niceStep(M) { const raw = M / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+
+// 枠番
+const sel = $('#courseSel');
+const VORD = ['札幌', '函館', '福島', '新潟', '東京', '中山', '中京', '京都', '阪神', '小倉'];
+[...D.frames].sort((a, b) => VORD.indexOf(a.c.split(' ')[0]) - VORD.indexOf(b.c.split(' ')[0]) || a.c.localeCompare(b.c, 'ja', { numeric: true }))
+  .forEach(f => sel.add(new Option(`${f.c}（${f.races}R）`, f.c)));
+sel.value = '新潟 芝1000m';
+function drawFrames() {
+  const f = D.frames.find(x => x.c === sel.value);
+  bars($('#frameChart'), f.f.map((v, i) => ({ l: (i + 1) + '枠', v })), { colors: FRAME, fmtv: v => v.toFixed(1), unit: '%', tip: r => `${f.c} ${r.l}：勝率${r.v.toFixed(2)}%（${f.races}レース）` });
+  const r = f.ratio;
+  $('#frameLead').innerHTML = r >= 1 ? `内枠（1・2枠）は外枠（7・8枠）の<b>${r.toFixed(2)}倍</b>勝っています。` : `外枠（7・8枠）は内枠（1・2枠）の<b>${(1 / r).toFixed(2)}倍</b>勝っています。`;
+}
+sel.onchange = drawFrames; drawFrames();
+
+// 人気
+let pk = 'win';
+function drawPop() {
+  const lab = { win: '勝率', top3: '3着内率', roi: '単勝回収率' }[pk];
+  bars($('#popChart'), D.pop.map(p => ({ l: p.p, v: p[pk], n: p.n })), { unit: '%', ref: pk === 'roi' ? 100 : null, hi: pk === 'roi' ? [] : [0], fmtv: v => v.toFixed(0),
+    tip: r => `${r.l}番人気：${lab} ${r.v.toFixed(1)}%（${fmt(r.n)}頭）` });
+  const p1 = D.pop[0];
+  $('#popLead').innerHTML = pk === 'win' ? `1番人気の勝率は<b>${p1.win.toFixed(1)}%</b>。3回に2回は負けています。` :
+    pk === 'top3' ? `1番人気でも3着以内は<b>${p1.top3.toFixed(1)}%</b>。` :
+    `どの人気を買い続けても100%に届きません。<b>人気薄ほど回収率が下がる</b>のが競馬の特徴です。`;
+  ['pWin', 'pTop3', 'pRoi'].forEach((id, i) => $('#' + id).setAttribute('aria-pressed', ['win', 'top3', 'roi'][i] === pk));
+}
+$('#pWin').onclick = () => { pk = 'win'; drawPop(); }; $('#pTop3').onclick = () => { pk = 'top3'; drawPop(); }; $('#pRoi').onclick = () => { pk = 'roi'; drawPop(); };
+drawPop();
+
+// 馬場
+const gmax = Math.max(...D.going.map(g => g.big));
+$('#goingTbl').innerHTML = `<thead><tr><th>コース</th><th>馬場</th><th class="r">レース数</th><th class="r">1番人気の勝率</th><th>三連単10万円以上の割合</th><th class="r">三連単の中央値</th></tr></thead><tbody>` +
+  D.going.map(g => `<tr><td>${g.s === '芝' ? '芝' : 'ダート'}</td><td>${g.g}</td><td class="r">${fmt(g.n)}</td><td class="r">${g.fav.toFixed(1)}%</td><td><span class="inbar" style="width:${g.big / gmax * 90}px"></span>${g.big.toFixed(1)}%</td><td class="r">${fmt(g.med)}円</td></tr>`).join('') + '</tbody>';
+
+// 逃げ
+const nmax = Math.max(...D.nige_venue.map(x => x.win));
+$('#nigeTbl').innerHTML = `<thead><tr><th>競馬場</th><th>芝の逃げ馬</th><th>ダートの逃げ馬</th></tr></thead><tbody>` +
+  VORD.map(v => { const t = D.nige_venue.find(x => x.v === v && x.s === '芝'), d = D.nige_venue.find(x => x.v === v && x.s === 'ダ');
+    const cell = x => x ? `<span class="inbar" style="width:${x.win / nmax * 80}px"></span>${x.win.toFixed(1)}% <span style="color:var(--muted);font-size:12px">（${fmt(x.n)}頭）</span>` : '—';
+    return `<tr><td>${v}</td><td>${cell(t)}</td><td>${cell(d)}</td></tr>`; }).join('') + '</tbody>';
+
+// 年齢・体重増減
+bars($('#ageChart'), D.age.map(a => ({ l: a.a + '歳', v: a.win, n: a.n })), { h: 200, unit: '%', hi: [2], fmtv: v => v.toFixed(1), tip: r => `${r.l}：勝率${r.v.toFixed(2)}%（${fmt(r.n)}走）` });
+bars($('#bwdChart'), D.bwd.map(a => ({ l: a.b, v: a.win, n: a.n })), { h: 200, unit: '%', hi: [3], fmtv: v => v.toFixed(1), tip: r => `${r.l}kg：勝率${r.v.toFixed(2)}%（${fmt(r.n)}走）` });
+
+// 菊花賞
+$('#kikkaTbl').innerHTML = `<thead><tr><th>年</th><th>馬場</th><th>勝ち馬</th><th class="r">人気</th><th class="r">単勝</th><th>騎手</th><th>枠</th><th>通過順</th><th class="r">上がり3F</th><th class="r">タイム</th><th>2着・3着</th><th class="r">三連単</th></tr></thead><tbody>` +
+  D.kikka.map(k => { const t = k.time, mm = Math.floor(t / 60), ss = (t - mm * 60).toFixed(1).padStart(4, '0');
+    return `<tr><td>${k.year}</td><td>${k.going}</td><td><b>${esc(k.winner)}</b></td><td class="r"><span class="chip ${k.pop === 1 ? 'fav' : ''}">${k.pop}</span></td><td class="r">${k.odds.toFixed(1)}倍</td><td>${esc(jn(k.jockey))}</td>
+    <td><span class="inbar" style="width:10px;height:10px;border-radius:2px;background:${FRAME[k.frame - 1]};outline:1px solid var(--muted)"></span>${k.frame}</td><td>${k.pass_}</td><td class="r">${k.last3f.toFixed(1)}</td><td class="r">${mm}:${ss}</td>
+    <td>${k.top3.slice(1).map(x => `${esc(x.name)}（${x.pop}）`).join('、')}</td><td class="r">${fmt(k.t3)}円</td></tr>`; }).join('') + '</tbody>';
+
+/* ---------- tooltip ---------- */
+const tipEl = $('#tip');
+document.addEventListener('pointermove', e => {
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (!t) { tipEl.classList.remove('on'); return; }
+  tipEl.textContent = t.dataset.tip; tipEl.classList.add('on');
+  const x = Math.min(e.clientX + 14, innerWidth - tipEl.offsetWidth - 8);
+  tipEl.style.left = x + 'px'; tipEl.style.top = (e.clientY + 16) + 'px';
+});
+
+/* 最初の表示：上の数字だけ一度カウントアップ */
+document.querySelectorAll('#board .cu').forEach(countUp);
+</script>

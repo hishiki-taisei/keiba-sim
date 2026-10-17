@@ -1,0 +1,608 @@
+<title>競馬データ図鑑</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: 電光掲示板（オッズ板）の黒いカードを縦長ショートとして並べ、その下に明るい「データで遊ぶ」面を置く */
+:root {
+  --bg: #f1f4ef; --panel: #ffffff; --ink: #121813; --ink2: #47544b; --muted: #758279;
+  --line: #d7ded6; --accent: #19744a; --accent-soft: #d4ebdc; --hot: #c06d00;
+  --bar: #9fb5a7;
+  /* 掲示板カードは常に夜の色 */
+  --tote: #0b0e0c; --tote2: #151a17; --led: #ffb21a; --led-dim: #3b423d; --tote-ink: #f2efe6; --tote-sub: #9ba59e;
+  --display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", "Yu Gothic", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --dot: "DotGothic16", "Osaka-Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1210; --panel: #161c18; --ink: #edf2ec; --ink2: #b3beb6; --muted: #849088;
+    --line: #29312c; --accent: #4cc58b; --accent-soft: #1d3a2b; --hot: #ffb21a; --bar: #4c5f53;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1210; --panel: #161c18; --ink: #edf2ec; --ink2: #b3beb6; --muted: #849088;
+  --line: #29312c; --accent: #4cc58b; --accent-soft: #1d3a2b; --hot: #ffb21a; --bar: #4c5f53;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; line-height: 1.25; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* hero */
+.hero { background: var(--tote); color: var(--tote-ink); }
+.hero .wrap { padding-block: 40px 28px; display: grid; gap: 22px; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; color: var(--tote-sub); }
+.hero h1 { font-size: clamp(34px, 7vw, 64px); }
+.hero h1 em { font-style: normal; color: var(--led); }
+.hero p { margin: 0; max-width: 60ch; color: #cfd6d0; }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 2px; background: #222924; border: 2px solid #222924; border-radius: 6px; overflow: hidden; }
+.board div { background: var(--tote2); padding: 10px 14px; display: grid; }
+.board b { font-family: var(--dot); font-weight: 400; color: var(--led); font-size: clamp(24px, 4vw, 34px); line-height: 1.2; text-shadow: 0 0 10px rgba(255,178,26,.35); }
+.board span { font-size: 12px; color: var(--tote-sub); }
+nav.jump { display: flex; flex-wrap: wrap; gap: 8px; }
+nav.jump a { color: var(--tote-ink); text-decoration: none; border: 1px solid #39423c; padding: 4px 12px; border-radius: 99px; font-size: 13px; }
+nav.jump a:hover, nav.jump a:focus-visible { border-color: var(--led); color: var(--led); outline: none; }
+
+section { padding-block: 44px 8px; }
+.sec-head { display: grid; gap: 6px; margin-bottom: 22px; }
+.sec-head h2 { font-size: clamp(24px, 4vw, 34px); }
+.sec-head p { margin: 0; color: var(--ink2); max-width: 66ch; }
+
+/* shorts cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 28px 20px; }
+.cell { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card { container-type: inline-size; aspect-ratio: 9 / 16; width: 100%; max-width: 100%; background: var(--tote); color: var(--tote-ink); border-radius: 14px; overflow: hidden; position: relative; }
+.card > .ci { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 8cqw 7cqw 6cqw; gap: 3.5cqw;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.045) 1px, transparent 1.4px); background-size: 3.2cqw 3.2cqw; }
+.card .tag { align-self: flex-start; font-size: 3.6cqw; letter-spacing: .12em; color: var(--tote); background: var(--led); padding: .4cqw 2.4cqw; border-radius: 1cqw; font-weight: 700; }
+.card h3 { font-size: 7.6cqw; line-height: 1.32; word-break: auto-phrase; }
+.card h3 em { font-style: normal; color: var(--led); }
+.card .big { font-family: var(--dot); color: var(--led); font-size: 15cqw; line-height: 1.05; text-shadow: 0 0 3cqw rgba(255,178,26,.35); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.card .big.s { font-size: 11.5cqw; }
+.card .sub { font-size: 4.1cqw; color: #d5dbd6; line-height: 1.55; }
+.card .viz { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.card .viz svg { width: 100%; height: auto; max-height: 100%; display: block; overflow: visible; }
+.card .note { font-size: 3.1cqw; color: var(--tote-sub); border-top: 1px solid #2a312c; padding-top: 2.4cqw; }
+.card .brand { position: absolute; top: 8.4cqw; right: 7cqw; font-size: 3.1cqw; color: var(--tote-sub); letter-spacing: .1em; }
+.tx { fill: var(--tote-sub); font-family: var(--body); }
+.tx.hi { fill: var(--led); font-family: var(--dot); }
+.tx.w { fill: var(--tote-ink); }
+.gb { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .8s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); }
+.gh { transform-box: fill-box; transform-origin: 0 50%; transition: transform .8s cubic-bezier(.2,.8,.2,1) var(--d, 0ms); }
+.fade { transition: opacity .5s ease var(--d, 0ms); }
+.ln { stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 2.6s cubic-bezier(.4,0,.2,1); }
+.reset .gb { transform: scaleY(0); transition: none; }
+.reset .gh { transform: scaleX(0); transition: none; }
+.reset .fade { opacity: 0; transition: none; }
+.reset .ln { stroke-dashoffset: 1; transition: none; }
+.horses { display: grid; gap: 2cqw; }
+.horses div { display: grid; grid-template-columns: 9cqw 1fr auto; align-items: center; gap: 2.4cqw; font-size: 4.6cqw; background: var(--tote2); border: 1px solid #262d28; border-radius: 1.6cqw; padding: 1.6cqw 2.4cqw; }
+.horses i { font-style: normal; font-family: var(--dot); color: var(--led); font-size: 5.6cqw; text-align: center; }
+.horses small { color: var(--tote-sub); font-size: 3.6cqw; }
+.ctrl { display: flex; gap: 8px; flex-wrap: wrap; }
+button, select { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); color: var(--accent); }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+button.primary:hover { color: var(--panel); filter: brightness(1.08); }
+button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+
+/* 縦型プレビュー */
+.stage { position: fixed; inset: 0; z-index: 50; background: #000; display: grid; place-items: center; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.stage .card { width: min(100vw, calc((100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 9 / 16)); border-radius: 0; }
+.stage .x { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); background: rgba(255,255,255,.12); color: #fff; border: 0; font-size: 13px; z-index: 2; }
+.stage .x:hover { background: rgba(255,255,255,.24); color: #fff; }
+
+/* 勝ち星レース */
+.race-layout { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.race-side { display: grid; gap: 14px; min-width: 0; }
+.race-side p { margin: 0; color: var(--ink2); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.bcr { position: relative; flex: 1; min-height: 0; }
+.bcr .row { position: absolute; left: 0; right: 0; height: var(--rh, 7.4cqw); display: flex; align-items: center; transition: transform .45s ease; }
+.bcr .row .lab { width: 34cqw; flex: none; font-size: 3.7cqw; text-align: right; padding-right: 2cqw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bcr .row .bw { flex: 1; position: relative; height: 72%; margin-right: 12cqw; }
+.bcr .row .b { height: 100%; background: var(--led-dim); border-radius: 0 1cqw 1cqw 0; transition: width .45s linear; min-width: 2px; }
+.bcr .row.lead .b { background: var(--led); }
+.bcr .row .v { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--dot); font-size: 4cqw; color: var(--tote-ink); padding-left: 1.6cqw; transition: left .45s linear; white-space: nowrap; }
+.bcr .row.lead .v { color: var(--led); }
+.bcr-when { font-family: var(--dot); color: var(--led); font-size: 13cqw; line-height: 1; text-align: right; }
+
+/* データで遊ぶ */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 14px; display: grid; gap: 10px; min-width: 0; align-content: start; }
+.panel h3 { font-family: var(--body); font-weight: 700; font-size: 17px; }
+.panel .lead { margin: 0; color: var(--ink2); font-size: 14px; }
+.panel .lead b { color: var(--accent); }
+.panel svg { width: 100%; height: auto; display: block; overflow: visible; }
+.panel .src { font-size: 12px; color: var(--muted); margin: 0; }
+.ax { fill: var(--muted); font-size: 11px; font-family: var(--body); }
+.axv { fill: var(--ink2); font-size: 11px; font-family: var(--body); font-variant-numeric: tabular-nums; }
+.grid line { stroke: var(--line); }
+.ref { stroke: var(--ink2); stroke-dasharray: 3 3; }
+.bp { fill: var(--bar); }
+.bp.hi { fill: var(--accent); }
+.hit { fill: transparent; cursor: default; }
+.hit:hover + .bp, .bp:hover { filter: brightness(1.15); }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); font-size: 12px; }
+td.r, th.r { text-align: right; }
+.chip { display: inline-block; min-width: 2.6em; text-align: center; border-radius: 99px; padding: 0 8px; font-size: 12px; background: var(--accent-soft); color: var(--ink); }
+.chip.fav { background: var(--accent); color: var(--panel); }
+.inbar { display: inline-block; height: 8px; border-radius: 0 3px 3px 0; background: var(--accent); vertical-align: middle; margin-right: 6px; }
+.tip { position: fixed; z-index: 60; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12.5px; padding: 6px 10px; border-radius: 6px; max-width: 260px; line-height: 1.5; opacity: 0; transition: opacity .12s; }
+.tip.on { opacity: 1; }
+footer { padding-block: 40px 56px; color: var(--muted); font-size: 12.5px; }
+footer p { margin: 0 0 6px; max-width: 80ch; }
+
+@media (max-width: 820px) { .race-layout { grid-template-columns: 1fr; } .race-layout .cell { max-width: 400px; } }
+@media (prefers-reduced-motion: reduce) {
+  .gb, .gh, .fade, .ln, .bcr .row, .bcr .row .b, .bcr .row .v { transition: none !important; }
+}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">JRA 全レース 2015.1 — 2026.10</div>
+    <h1>数字で見る、<em>11年分</em>の競馬</h1>
+    <p>集めたJRAの全レース結果から、思わず人に話したくなる数字を抜き出しました。黒いカードは縦長9:16なので、「縦型で再生」で全画面にして画面収録すれば、そのままショート動画の素材になります。</p>
+    <div class="board" id="board"></div>
+    <nav class="jump" aria-label="ページ内リンク">
+      <a href="#shorts">ショートのネタ帳</a><a href="#race">勝ち星レース</a><a href="#play">データで遊ぶ</a><a href="#kikka">菊花賞の11年</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="shorts">
+    <div class="sec-head">
+      <h2>ショートのネタ帳</h2>
+      <p>1枚で1ネタ。「▶ 再生」で数字とグラフが動き、「縦型で再生」で全画面の9:16になります。数字はすべてこのデータからの集計です。</p>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section id="race">
+    <div class="sec-head">
+      <h2>勝ち星レース</h2>
+      <p>2015年1月からの通算勝利数を1か月ずつ積み上げます。騎手と種牡馬（父馬）を切り替えられます。</p>
+    </div>
+    <div class="race-layout">
+      <div class="cell" id="raceCell"></div>
+      <div class="race-side">
+        <div class="ctrl" role="group" aria-label="ランキングの種類">
+          <button id="rjBtn" aria-pressed="true">騎手</button>
+          <button id="rsBtn" aria-pressed="false">種牡馬</button>
+        </div>
+        <label for="raceSlider" class="eyebrow" style="color:var(--muted)">月を動かす</label>
+        <input type="range" id="raceSlider" min="0" value="0">
+        <p id="raceNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="play">
+    <div class="sec-head">
+      <h2>データで遊ぶ</h2>
+      <p>カードのネタの元になった集計を、条件を変えながら見られます。棒にカーソルを合わせると件数が出ます。</p>
+    </div>
+    <div class="grid2">
+      <div class="panel">
+        <h3>コース別・枠番ごとの勝率</h3>
+        <label for="courseSel" class="src">コース（14頭立て以上、150レース以上あるコース）</label>
+        <select id="courseSel"></select>
+        <p class="lead" id="frameLead"></p>
+        <div id="frameChart"></div>
+        <p class="src">枠の色はJRAの帽子の色。1頭あたりの勝率なので、頭数の多い7・8枠も公平に比べています。</p>
+      </div>
+      <div class="panel">
+        <h3>人気ごとの勝率と回収率</h3>
+        <div class="ctrl" role="group" aria-label="指標">
+          <button id="pWin" aria-pressed="true">勝率</button>
+          <button id="pTop3" aria-pressed="false">3着内率</button>
+          <button id="pRoi" aria-pressed="false">単勝回収率</button>
+        </div>
+        <p class="lead" id="popLead"></p>
+        <div id="popChart"></div>
+        <p class="src">単勝回収率は、その人気の馬の単勝を全部100円ずつ買ったときの払戻の割合。点線が100%（収支トントン）。</p>
+      </div>
+      <div class="panel">
+        <h3>馬場が悪いと荒れるのか</h3>
+        <p class="lead">芝は馬場が悪くなるほど1番人気が勝てなくなり、10万円以上の三連単が増えます。ダートはほとんど変わりません。</p>
+        <div class="tbl-wrap"><table id="goingTbl"></table></div>
+      </div>
+      <div class="panel">
+        <h3>競馬場ごとの「逃げ馬」の勝率</h3>
+        <p class="lead">最初のコーナーを先頭で回った馬が勝った割合。どこでも全体の勝率（約7%）の2倍以上。函館のダートでは3割近くが逃げ切ります。</p>
+        <div class="tbl-wrap"><table id="nigeTbl"></table></div>
+      </div>
+      <div class="panel">
+        <h3>年齢ごとの勝率</h3>
+        <p class="lead">4歳がピーク。5歳から目に見えて下がります（障害レースを除く）。</p>
+        <div id="ageChart"></div>
+      </div>
+      <div class="panel">
+        <h3>前走からの馬体重の増減と勝率</h3>
+        <p class="lead">前走から±3kgの馬がいちばん勝ちます。大きく減っても、大きく増えても勝率は下がります。</p>
+        <div id="bwdChart"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="kikka">
+    <div class="sec-head">
+      <h2>菊花賞の11年</h2>
+      <p>京都 芝3000m。このプロジェクトが予想を目指している菊花賞の、2015年からの勝ち馬です（2021〜2022年は阪神開催）。</p>
+    </div>
+    <div class="panel"><div class="tbl-wrap"><table id="kikkaTbl"></table></div></div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>データ：netkeiba のレース結果ページから集めた JRA 全レース（2015年1月4日〜2026年10月12日、40,732レース）。取消・除外・中止は着順の集計から除いています。</p>
+  <p>払戻・オッズは確定時のもの。「史上最高」などの表現はこの期間のデータの中での記録です。</p>
+</footer>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+const D = {"hero": {"races": 40732, "runs": 564654, "horses": 62413, "jockeys": 435, "start": "2015-01-04", "end": "2026-10-12", "payouts": 487173}, "pop": [{"p": 1, "n": 40597, "win": 33.01, "top3": 64.7, "roi": 78.9}, {"p": 2, "n": 40582, "win": 19.4, "top3": 51.79, "roi": 80.4}, {"p": 3, "n": 40590, "win": 13.21, "top3": 41.58, "roi": 79.1}, {"p": 4, "n": 40577, "win": 9.45, "top3": 33.5, "roi": 77.8}, {"p": 5, "n": 40552, "win": 7.16, "top3": 26.69, "roi": 79.9}, {"p": 6, "n": 40508, "win": 5.32, "top3": 21.68, "roi": 81.1}, {"p": 7, "n": 40294, "win": 3.88, "top3": 16.56, "roi": 79.3}, {"p": 8, "n": 39792, "win": 2.81, "top3": 13.07, "roi": 74.1}, {"p": 9, "n": 38607, "win": 2.12, "top3": 10.12, "roi": 73.9}, {"p": 10, "n": 36912, "win": 1.67, "top3": 7.91, "roi": 74.8}, {"p": 11, "n": 34666, "win": 1.2, "top3": 6.25, "roi": 71.6}, {"p": 12, "n": 32026, "win": 0.96, "top3": 4.97, "roi": 71.3}, {"p": 13, "n": 28776, "win": 0.63, "top3": 3.55, "roi": 60.0}, {"p": 14, "n": 25641, "win": 0.46, "top3": 2.77, "roi": 56.0}, {"p": 15, "n": 21472, "win": 0.37, "top3": 2.06, "roi": 51.3}, {"p": 16, "n": 16647, "win": 0.23, "top3": 1.29, "roi": 48.1}], "odds": [{"o": 1.1, "n": 186, "win": 80.1}, {"o": 1.2, "n": 262, "win": 65.3}, {"o": 1.3, "n": 487, "win": 67.1}, {"o": 1.4, "n": 804, "win": 62.1}, {"o": 1.5, "n": 1085, "win": 54.3}, {"o": 1.6, "n": 1066, "win": 50.3}, {"o": 1.7, "n": 1720, "win": 46.9}, {"o": 1.8, "n": 1754, "win": 42.7}, {"o": 1.9, "n": 1872, "win": 41.2}, {"o": 2.0, "n": 1749, "win": 38.1}], "lost11": [{"date": "2025-11-24", "venue": "東京", "name": "2歳未勝利", "horse_name": "イナズマダイモン", "finish": 2, "jockey_name": "川田将雅"}, {"date": "2025-11-30", "venue": "東京", "name": "2歳未勝利", "horse_name": "アウダーシア", "finish": 2, "jockey_name": "ルメール"}, {"date": "2026-03-21", "venue": "中京", "name": "3歳未勝利", "horse_name": "アラムシャピラス", "finish": 2, "jockey_name": "川田将雅"}, {"date": "2026-03-28", "venue": "中山", "name": "3歳未勝利", "horse_name": "ゴールドプレイヤー", "finish": 3, "jockey_name": "ルメール"}, {"date": "2026-07-04", "venue": "福島", "name": "2歳未勝利", "horse_name": "ウィンターブリーズ", "finish": 2, "jockey_name": "戸崎圭太"}, {"date": "2026-08-29", "venue": "札幌", "name": "2歳未勝利", "horse_name": "ダノンキューブ", "finish": 4, "jockey_name": "武豊"}, {"date": "2026-09-05", "venue": "札幌", "name": "2歳未勝利", "horse_name": "サトノフルーク", "finish": 2, "jockey_name": "佐々木大"}, {"date": "2026-09-20", "venue": "阪神", "name": "2歳未勝利", "horse_name": "ハートノート", "finish": 2, "jockey_name": "松山弘平"}], "lost11_n": 37, "odds11_n": 186, "fav": {"series": [["2015-01", -9400], ["2015-02", -15250], ["2015-03", -25610], ["2015-04", -31270], ["2015-05", -41720], ["2015-06", -48580], ["2015-07", -56310], ["2015-08", -63760], ["2015-09", -70690], ["2015-10", -73090], ["2015-11", -77090], ["2015-12", -81930], ["2016-01", -87300], ["2016-02", -91300], ["2016-03", -95980], ["2016-04", -105770], ["2016-05", -110330], ["2016-06", -116470], ["2016-07", -125600], ["2016-08", -129940], ["2016-09", -135610], ["2016-10", -141930], ["2016-11", -146430], ["2016-12", -153150], ["2017-01", -159390], ["2017-02", -165670], ["2017-03", -172140], ["2017-04", -177710], ["2017-05", -183110], ["2017-06", -186440], ["2017-07", -194650], ["2017-08", -205120], ["2017-09", -208120], ["2017-10", -209720], ["2017-11", -215640], ["2017-12", -221570], ["2018-01", -231260], ["2018-02", -238050], ["2018-03", -245470], ["2018-04", -254390], ["2018-05", -261430], ["2018-06", -269270], ["2018-07", -277240], ["2018-08", -283460], ["2018-09", -290300], ["2018-10", -297330], ["2018-11", -304050], ["2018-12", -308630], ["2019-01", -314490], ["2019-02", -322220], ["2019-03", -332910], ["2019-04", -338290], ["2019-05", -346360], ["2019-06", -352390], ["2019-07", -356580], ["2019-08", -359180], ["2019-09", -361870], ["2019-10", -370180], ["2019-11", -375880], ["2019-12", -382240], ["2020-01", -390050], ["2020-02", -393660], ["2020-03", -399750], ["2020-04", -405020], ["2020-05", -411740], ["2020-06", -418160], ["2020-07", -425470], ["2020-08", -434620], ["2020-09", -438830], ["2020-10", -444130], ["2020-11", -450250], ["2020-12", -454610], ["2021-01", -459710], ["2021-02", -467980], ["2021-03", -473450], ["2021-04", -480080], ["2021-05", -487950], ["2021-06", -490880], ["2021-07", -493910], ["2021-08", -495660], ["2021-09", -502410], ["2021-10", -509830], ["2021-11", -515940], ["2021-12", -522450], ["2022-01", -528590], ["2022-02", -532110], ["2022-03", -537740], ["2022-04", -544760], ["2022-05", -551330], ["2022-06", -556330], ["2022-07", -565010], ["2022-08", -566320], ["2022-09", -571820], ["2022-10", -576140], ["2022-11", -580230], ["2022-12", -586800], ["2023-01", -593890], ["2023-02", -598630], ["2023-03", -605090], ["2023-04", -612330], ["2023-05", -616780], ["2023-06", -623990], ["2023-07", -630160], ["2023-08", -634220], ["2023-09", -640240], ["2023-10", -646950], ["2023-11", -650760], ["2023-12", -657830], ["2024-01", -664010], ["2024-02", -668770], ["2024-03", -675630], ["2024-04", -681120], ["2024-05", -690260], ["2024-06", -698770], ["2024-07", -703480], ["2024-08", -710680], ["2024-09", -715190], ["2024-10", -719200], ["2024-11", -720720], ["2024-12", -725900], ["2025-01", -731080], ["2025-02", -735970], ["2025-03", -741450], ["2025-04", -744570], ["2025-05", -754370], ["2025-06", -761550], ["2025-07", -768970], ["2025-08", -775670], ["2025-09", -780770], ["2025-10", -789310], ["2025-11", -796510], ["2025-12", -802200], ["2026-01", -808260], ["2026-02", -811860], ["2026-03", -820560], ["2026-04", -827410], ["2026-05", -831310], ["2026-06", -839560], ["2026-07", -843650], ["2026-08", -847880], ["2026-09", -853930], ["2026-10", -856910]], "stake": 4059700, "ret": 3202790, "n": 40597, "wins": 13400, "maxwin": 640}, "top3t": [{"date": "2026-01-31", "venue": "小倉", "race_no": 6, "name": "3歳未勝利", "payout": 58367060, "pop": 4851, "n": 18, "horses": [{"no": 2, "name": "カシノリアーナ", "pop": 18}, {"no": 12, "name": "スッサンエア", "pop": 17}, {"no": 15, "name": "コンフィアンサ", "pop": 10}]}, {"date": "2026-09-06", "venue": "中山", "race_no": 7, "name": "3歳未勝利", "payout": 52948520, "pop": 4541, "n": 18, "horses": [{"no": 5, "name": "カテドラルクォーツ", "pop": 17}, {"no": 4, "name": "ジェイエルグリーン", "pop": 15}, {"no": 13, "name": "サンクレゾン", "pop": 6}]}, {"date": "2015-09-21", "venue": "中山", "race_no": 1, "name": "2歳未勝利", "payout": 27929360, "pop": 2643, "n": 15, "horses": [{"no": 4, "name": "アリオンダンス", "pop": 11}, {"no": 14, "name": "ロッジポールパイン", "pop": 9}, {"no": 5, "name": "シゲルナガイワシ", "pop": 15}]}, {"date": "2017-12-03", "venue": "中京", "race_no": 7, "name": "3歳以上500万下", "payout": 22946150, "pop": 2879, "n": 16, "horses": [{"no": 15, "name": "ディスカバー", "pop": 15}, {"no": 14, "name": "スズカフューラー", "pop": 6}, {"no": 11, "name": "メイショウナンプウ", "pop": 14}]}, {"date": "2017-12-09", "venue": "中山", "race_no": 7, "name": "3歳以上500万下", "payout": 21802320, "pop": 3249, "n": 16, "horses": [{"no": 3, "name": "ランニングウインド", "pop": 16}, {"no": 14, "name": "アドマイヤガスト", "pop": 12}, {"no": 11, "name": "グレイスニコ", "pop": 6}]}, {"date": "2021-02-20", "venue": "東京", "race_no": 4, "name": "3歳1勝クラス", "payout": 20738890, "pop": 3257, "n": 16, "horses": [{"no": 16, "name": "ハコダテブショウ", "pop": 11}, {"no": 6, "name": "マイグレーション", "pop": 15}, {"no": 8, "name": "ユイノチャッキー", "pop": 9}]}, {"date": "2015-05-17", "venue": "東京", "race_no": 11, "name": "第10回ヴィクトリアマイル(GI)", "payout": 20705810, "pop": 4140, "n": 18, "horses": [{"no": 5, "name": "ストレイトガール", "pop": 5}, {"no": 7, "name": "ケイアイエレガント", "pop": 12}, {"no": 18, "name": "ミナレット", "pop": 18}]}, {"date": "2019-02-10", "venue": "東京", "race_no": 8, "name": "4歳以上1000万下", "payout": 18068890, "pop": 3237, "n": 16, "horses": [{"no": 4, "name": "マイネルアンファン", "pop": 14}, {"no": 6, "name": "アバオアクー", "pop": 13}, {"no": 15, "name": "ジェミニズ", "pop": 11}]}, {"date": "2023-08-20", "venue": "札幌", "race_no": 7, "name": "3歳以上1勝クラス", "payout": 17730000, "pop": 3282, "n": 16, "horses": [{"no": 10, "name": "ワレハウミノコ", "pop": 14}, {"no": 14, "name": "シャドウエリス", "pop": 16}, {"no": 12, "name": "ポーレット", "pop": 9}]}, {"date": "2023-12-17", "venue": "中山", "race_no": 2, "name": "2歳未勝利", "payout": 17649380, "pop": 2649, "n": 16, "horses": [{"no": 15, "name": "ユイノコキュウ", "pop": 11}, {"no": 11, "name": "グアラニア", "pop": 14}, {"no": 6, "name": "カマクラバクフ", "pop": 8}]}], "t3count": 40972, "t3_over1m": 942, "t3_median": 26560, "upsets": [{"date": "2022-02-12", "venue": "東京", "race_no": 12, "name": "4歳以上2勝クラス", "horse_name": "ヤマメ", "odds": 549.4, "popularity": 16, "n_runners": 16, "jockey_name": "小林脩斗"}, {"date": "2017-12-03", "venue": "中京", "race_no": 7, "name": "3歳以上500万下", "horse_name": "ディスカバー", "odds": 450.1, "popularity": 15, "n_runners": 16, "jockey_name": "木幡初也"}, {"date": "2016-04-10", "venue": "阪神", "race_no": 3, "name": "3歳未勝利", "horse_name": "タガノインペーロ", "odds": 433.9, "popularity": 15, "n_runners": 16, "jockey_name": "荻野極"}, {"date": "2016-12-17", "venue": "阪神", "race_no": 3, "name": "2歳未勝利", "horse_name": "ミルトプリンス", "odds": 415.9, "popularity": 14, "n_runners": 17, "jockey_name": "古川吉洋"}, {"date": "2018-04-28", "venue": "東京", "race_no": 1, "name": "3歳未勝利", "horse_name": "ヤマニンリュシオル", "odds": 398.3, "popularity": 16, "n_runners": 16, "jockey_name": "伊藤工真"}, {"date": "2026-01-31", "venue": "小倉", "race_no": 6, "name": "3歳未勝利", "horse_name": "カシノリアーナ", "odds": 388.2, "popularity": 18, "n_runners": 18, "jockey_name": "橋木太希"}], "raceno": [{"r": 1, "med": 17880, "big": 16.6, "fav": 36.9}, {"r": 2, "med": 19570, "big": 17.7, "fav": 34.7}, {"r": 3, "med": 25260, "big": 22.0, "fav": 34.3}, {"r": 4, "med": 24505, "big": 22.0, "fav": 33.9}, {"r": 5, "med": 21470, "big": 19.6, "fav": 34.9}, {"r": 6, "med": 26890, "big": 20.6, "fav": 32.5}, {"r": 7, "med": 28230, "big": 22.3, "fav": 32.9}, {"r": 8, "med": 26160, "big": 21.7, "fav": 33.4}, {"r": 9, "med": 22585, "big": 18.6, "fav": 32.1}, {"r": 10, "med": 32500, "big": 26.0, "fav": 31.4}, {"r": 11, "med": 47720, "big": 31.1, "fav": 27.8}, {"r": 12, "med": 37900, "big": 28.6, "fav": 31.3}], "going": [{"s": "芝", "g": "良", "n": 15461, "med": 24570, "big": 21.3, "fav": 33.6}, {"s": "芝", "g": "稍重", "n": 2934, "med": 28040, "big": 21.7, "fav": 32.5}, {"s": "芝", "g": "重", "n": 1144, "med": 34210, "big": 25.8, "fav": 27.1}, {"s": "芝", "g": "不良", "n": 242, "med": 44035, "big": 32.2, "fav": 24.6}, {"s": "ダ", "g": "良", "n": 12123, "med": 28830, "big": 23.5, "fav": 32.7}, {"s": "ダ", "g": "稍重", "n": 4110, "med": 25065, "big": 20.6, "fav": 33.7}, {"s": "ダ", "g": "重", "n": 2256, "med": 28445, "big": 23.0, "fav": 33.5}, {"s": "ダ", "g": "不良", "n": 1219, "med": 30210, "big": 25.7, "fav": 31.2}], "jday": [{"date": "2016-11-06", "jockey_name": "ルメール", "n": 8, "venue": "東京"}, {"date": "2019-08-04", "jockey_name": "ルメール", "n": 8, "venue": "札幌"}, {"date": "2017-10-28", "jockey_name": "ルメール", "n": 7, "venue": "東京"}, {"date": "2024-08-17", "jockey_name": "ルメール", "n": 7, "venue": "新潟"}, {"date": "2023-01-28", "jockey_name": "ルメール", "n": 6, "venue": "東京"}], "jday_rides": {"2016-11-06|ルメール": 10, "2019-08-04|ルメール": 12, "2017-10-28|ルメール": 11, "2024-08-17|ルメール": 8, "2023-01-28|ルメール": 9}, "bw": [{"b": "〜419", "n": 25132, "win": 3.37}, {"b": "420〜439", "n": 58757, "win": 5.05}, {"b": "440〜459", "n": 109984, "win": 6.47}, {"b": "460〜479", "n": 140866, "win": 7.37}, {"b": "480〜499", "n": 116794, "win": 8.13}, {"b": "500〜519", "n": 65339, "win": 8.75}, {"b": "520〜539", "n": 24076, "win": 9.13}, {"b": "540〜", "n": 6908, "win": 8.74}], "bwd": [{"b": "-20以下", "n": 1779, "win": 3.15}, {"b": "-10〜-19", "n": 29437, "win": 5.58}, {"b": "-4〜-9", "n": 108596, "win": 6.99}, {"b": "±3", "n": 258781, "win": 7.43}, {"b": "+4〜+10", "n": 121039, "win": 7.36}, {"b": "+11〜+20", "n": 24998, "win": 6.82}, {"b": "+21以上", "n": 3226, "win": 5.83}], "bw_ext": [{"date": "2017-03-12", "venue": "中京", "name": "4歳以上500万下", "horse_name": "コンテナ", "body_weight": 600}, {"date": "2019-09-28", "venue": "阪神", "name": "3歳以上500万下", "horse_name": "メロディーレーン", "body_weight": 338}], "most_wins": [{"horse_id": "2011101125", "horse_name": "オジュウチョウサン", "n": 37, "wins": 20, "top3": 26}, {"horse_id": "2012102013", "horse_name": "キタサンブラック", "n": 20, "wins": 12, "top3": 18}, {"horse_id": "2018110015", "horse_name": "レモンポップ", "n": 13, "wins": 10, "top3": 13}, {"horse_id": "2015104961", "horse_name": "アーモンドアイ", "n": 14, "wins": 10, "top3": 13}, {"horse_id": "2015102377", "horse_name": "ダノンスマッシュ", "n": 22, "wins": 10, "top3": 14}], "most_runs": [{"horse_id": "2017104266", "horse_name": "カップッチョ", "n": 88, "wins": 1, "top3": 6}, {"horse_id": "2013103671", "horse_name": "ヨシオ", "n": 75, "wins": 6, "top3": 19}, {"horse_id": "2014100555", "horse_name": "ヤマニンペダラーダ", "n": 75, "wins": 3, "top3": 16}, {"horse_id": "2010101988", "horse_name": "スワンボート", "n": 74, "wins": 0, "top3": 0}, {"horse_id": "2013103941", "horse_name": "グリニッチヴィレジ", "n": 73, "wins": 1, "top3": 11}], "no_win": [{"horse_id": "2010101988", "horse_name": "スワンボート", "n": 74, "wins": 0, "top3": 0}, {"horse_id": "2011101479", "horse_name": "メイショウラバンド", "n": 51, "wins": 0, "top3": 13}, {"horse_id": "2015103663", "horse_name": "フレンドアリス", "n": 50, "wins": 0, "top3": 5}, {"horse_id": "2013105685", "horse_name": "メメニシコリ", "n": 48, "wins": 0, "top3": 12}, {"horse_id": "2010105167", "horse_name": "ボストンビリーヴ", "n": 47, "wins": 0, "top3": 2}], "namelen": [{"l": 2, "n": 1572, "win": 5.73, "ex": "ジオ"}, {"l": 3, "n": 10798, "win": 7.33, "ex": "ソンシ"}, {"l": 4, "n": 24853, "win": 7.25, "ex": "キャネル"}, {"l": 5, "n": 40950, "win": 7.68, "ex": "ゴッドアイ"}, {"l": 6, "n": 74487, "win": 7.28, "ex": "バッデレイト"}, {"l": 7, "n": 126355, "win": 7.12, "ex": "ラストドラフト"}, {"l": 8, "n": 152988, "win": 7.2, "ex": "ブライアンキング"}, {"l": 9, "n": 132646, "win": 7.19, "ex": "クローリスノキセキ"}], "name2": ["ネロ", "セオ", "アノ", "ハピ", "スミ", "ムイ"], "age": [{"a": 2, "n": 94254, "win": 7.77}, {"a": 3, "n": 237286, "win": 7.65}, {"a": 4, "n": 99769, "win": 8.24}, {"a": 5, "n": 66685, "win": 5.98}, {"a": 6, "n": 31895, "win": 3.84}, {"a": 7, "n": 12449, "win": 2.59}, {"a": 8, "n": 4118, "win": 1.63}, {"a": 9, "n": 1132, "win": 1.59}], "style": [{"s": "ダ", "st": "先行", "n": 79263, "win": 11.3}, {"s": "ダ", "st": "差し", "n": 89226, "win": 5.01}, {"s": "ダ", "st": "追込", "n": 92013, "win": 2.49}, {"s": "ダ", "st": "逃げ", "n": 19578, "win": 20.04}, {"s": "芝", "st": "先行", "n": 75128, "win": 9.66}, {"s": "芝", "st": "差し", "n": 87694, "win": 7.09}, {"s": "芝", "st": "追込", "n": 85255, "win": 3.57}, {"s": "芝", "st": "逃げ", "n": 19699, "win": 16.03}], "l3f": [{"s": "ダ", "n": 17166, "win": 37.7, "top3": 68.3}, {"s": "芝", "n": 16422, "win": 35.0, "top3": 67.8}], "nige_venue": [{"v": "中京", "s": "ダ", "n": 2195, "win": 19.1}, {"v": "中京", "s": "芝", "n": 1854, "win": 15.6}, {"v": "中山", "s": "ダ", "n": 3227, "win": 20.0}, {"v": "中山", "s": "芝", "n": 2476, "win": 14.7}, {"v": "京都", "s": "ダ", "n": 2610, "win": 22.5}, {"v": "京都", "s": "芝", "n": 2322, "win": 14.9}, {"v": "函館", "s": "ダ", "n": 715, "win": 29.1}, {"v": "函館", "s": "芝", "n": 1011, "win": 22.5}, {"v": "小倉", "s": "ダ", "n": 1096, "win": 26.1}, {"v": "小倉", "s": "芝", "n": 1881, "win": 17.1}, {"v": "新潟", "s": "ダ", "n": 1566, "win": 21.3}, {"v": "新潟", "s": "芝", "n": 2005, "win": 15.7}, {"v": "札幌", "s": "ダ", "n": 778, "win": 18.5}, {"v": "札幌", "s": "芝", "n": 1110, "win": 17.9}, {"v": "東京", "s": "ダ", "n": 3145, "win": 14.7}, {"v": "東京", "s": "芝", "n": 3017, "win": 13.1}, {"v": "福島", "s": "ダ", "n": 1082, "win": 25.3}, {"v": "福島", "s": "芝", "n": 1405, "win": 16.2}, {"v": "阪神", "s": "ダ", "n": 3164, "win": 17.7}, {"v": "阪神", "s": "芝", "n": 2618, "win": 18.0}], "frames": [{"c": "中山 ダ1200m", "races": 1415, "f": [5.78, 5.52, 5.68, 5.47, 6.8, 7.24, 6.98, 7.29], "ratio": 0.79}, {"c": "中山 ダ1800m", "races": 1259, "f": [5.41, 7.25, 4.61, 6.48, 6.2, 6.92, 7.29, 7.37], "ratio": 0.87}, {"c": "東京 ダ1600m", "races": 1071, "f": [4.88, 5.72, 5.85, 6.1, 6.92, 6.96, 7.1, 7.67], "ratio": 0.72}, {"c": "東京 ダ1400m", "races": 1053, "f": [5.85, 6.17, 6.3, 6.4, 5.64, 6.42, 7.51, 6.61], "ratio": 0.85}, {"c": "阪神 ダ1400m", "races": 725, "f": [4.76, 5.54, 6.04, 6.38, 6.87, 6.33, 6.66, 8.54], "ratio": 0.68}, {"c": "阪神 ダ1800m", "races": 679, "f": [6.14, 5.28, 6.53, 6.68, 7.62, 6.75, 6.48, 6.46], "ratio": 0.88}, {"c": "小倉 芝1200m", "races": 640, "f": [4.77, 6.41, 4.94, 4.88, 5.97, 5.5, 6.91, 6.36], "ratio": 0.84}, {"c": "新潟 ダ1200m", "races": 635, "f": [5.7, 4.66, 6.09, 6.95, 6.61, 7.91, 7.92, 7.59], "ratio": 0.65}, {"c": "小倉 ダ1700m", "races": 596, "f": [5.54, 6.58, 5.5, 6.37, 7.63, 7.9, 5.15, 6.77], "ratio": 1.02}, {"c": "福島 ダ1700m", "races": 580, "f": [6.76, 6.75, 6.16, 5.56, 6.69, 7.05, 7.29, 7.81], "ratio": 0.89}, {"c": "新潟 ダ1800m", "races": 578, "f": [5.08, 5.37, 6.61, 6.39, 8.25, 7.75, 6.71, 7.26], "ratio": 0.75}, {"c": "京都 ダ1400m", "races": 561, "f": [5.94, 6.71, 6.46, 5.01, 7.65, 6.99, 6.74, 5.91], "ratio": 1.0}, {"c": "京都 ダ1800m", "races": 560, "f": [6.94, 6.98, 6.04, 6.34, 6.99, 7.05, 6.13, 6.04], "ratio": 1.14}, {"c": "阪神 ダ1200m", "races": 551, "f": [5.73, 5.82, 5.39, 6.68, 6.31, 7.37, 5.12, 8.58], "ratio": 0.84}, {"c": "中京 ダ1400m", "races": 537, "f": [5.88, 7.27, 5.24, 7.08, 5.69, 6.57, 6.45, 6.64], "ratio": 1.01}, {"c": "中山 芝1600m", "races": 529, "f": [6.97, 7.59, 7.34, 7.87, 5.83, 4.76, 5.41, 5.41], "ratio": 1.35}, {"c": "福島 芝1200m", "races": 503, "f": [7.37, 7.55, 7.21, 6.79, 5.51, 5.71, 5.69, 5.32], "ratio": 1.36}, {"c": "京都 ダ1200m", "races": 495, "f": [5.81, 5.83, 6.1, 6.44, 7.14, 5.92, 6.69, 7.55], "ratio": 0.82}, {"c": "東京 芝1600m", "races": 494, "f": [7.98, 5.86, 6.82, 4.89, 5.79, 5.72, 6.22, 5.93], "ratio": 1.13}, {"c": "中京 ダ1800m", "races": 464, "f": [7.31, 6.68, 7.28, 6.17, 6.62, 7.17, 5.22, 5.86], "ratio": 1.26}, {"c": "東京 芝1400m", "races": 462, "f": [6.8, 4.72, 6.62, 6.21, 6.83, 6.51, 4.81, 6.06], "ratio": 1.05}, {"c": "中京 ダ1200m", "races": 393, "f": [7.51, 5.77, 5.79, 6.92, 6.26, 5.91, 5.65, 7.45], "ratio": 1.01}, {"c": "福島 ダ1150m", "races": 359, "f": [7.56, 5.44, 7.29, 6.88, 5.63, 5.9, 5.35, 6.84], "ratio": 1.06}, {"c": "中山 芝2000m", "races": 358, "f": [7.05, 5.77, 6.02, 6.04, 6.33, 6.6, 4.91, 6.14], "ratio": 1.15}, {"c": "阪神 芝1600m", "races": 333, "f": [5.53, 6.85, 6.77, 7.08, 7.39, 6.34, 5.09, 4.11], "ratio": 1.35}, {"c": "東京 芝1800m", "races": 325, "f": [5.49, 6.12, 8.19, 7.72, 4.19, 5.58, 5.49, 7.05], "ratio": 0.93}, {"c": "札幌 ダ1700m", "races": 324, "f": [8.39, 6.25, 6.75, 7.98, 7.8, 7.52, 6.54, 6.68], "ratio": 1.11}, {"c": "東京 ダ2100m", "races": 324, "f": [5.26, 5.58, 7.76, 5.44, 8.58, 6.36, 6.41, 5.88], "ratio": 0.88}, {"c": "中山 芝1200m", "races": 322, "f": [5.88, 5.73, 7.49, 6.25, 6.55, 7.94, 5.3, 5.95], "ratio": 1.03}, {"c": "京都 芝1600m", "races": 303, "f": [6.89, 5.8, 6.3, 6.34, 5.64, 6.32, 6.37, 6.06], "ratio": 1.02}, {"c": "東京 ダ1300m", "races": 289, "f": [6.76, 6.23, 5.98, 7.67, 5.91, 6.45, 4.9, 7.3], "ratio": 1.06}, {"c": "小倉 芝1800m", "races": 280, "f": [6.6, 9.53, 5.75, 4.48, 7.54, 5.75, 6.5, 5.92], "ratio": 1.31}, {"c": "小倉 ダ1000m", "races": 270, "f": [6.74, 7.41, 7.64, 6.86, 7.99, 7.68, 6.18, 6.92], "ratio": 1.08}, {"c": "中京 芝1600m", "races": 269, "f": [8.63, 6.51, 7.85, 5.24, 4.87, 5.98, 5.64, 6.94], "ratio": 1.2}, {"c": "函館 芝1200m", "races": 267, "f": [8.89, 4.92, 6.43, 7.55, 7.74, 6.39, 4.54, 5.86], "ratio": 1.32}, {"c": "福島 芝1800m", "races": 266, "f": [6.45, 6.84, 7.2, 6.97, 5.12, 5.66, 7.56, 5.68], "ratio": 1.0}, {"c": "中京 芝1400m", "races": 258, "f": [6.38, 5.49, 8.59, 6.07, 5.83, 4.66, 5.6, 4.99], "ratio": 1.12}, {"c": "新潟 芝1000m", "races": 257, "f": [2.02, 3.17, 4.1, 3.72, 4.87, 5.48, 8.33, 13.07], "ratio": 0.24}, {"c": "阪神 芝1400m", "races": 252, "f": [7.36, 8.49, 8.78, 6.05, 6.19, 5.02, 4.47, 3.54], "ratio": 1.99}, {"c": "中京 芝2000m", "races": 247, "f": [7.18, 7.02, 5.7, 7.52, 6.11, 5.91, 4.94, 4.98], "ratio": 1.43}, {"c": "新潟 芝1400m", "races": 230, "f": [6.34, 6.12, 4.8, 5.48, 6.58, 5.91, 7.02, 5.57], "ratio": 0.99}, {"c": "中山 芝1800m", "races": 226, "f": [5.77, 9.2, 6.21, 7.11, 5.1, 6.65, 7.38, 4.87], "ratio": 1.24}, {"c": "新潟 芝1600m", "races": 226, "f": [4.52, 6.29, 5.78, 5.11, 6.87, 6.42, 7.22, 5.77], "ratio": 0.84}, {"c": "小倉 芝2000m", "races": 218, "f": [4.32, 8.29, 5.76, 6.7, 7.42, 5.77, 5.74, 5.21], "ratio": 1.17}, {"c": "福島 芝2000m", "races": 212, "f": [6.27, 6.77, 6.84, 6.9, 8.31, 5.91, 5.48, 5.23], "ratio": 1.22}, {"c": "京都 芝1400m", "races": 205, "f": [4.82, 4.96, 6.63, 7.62, 6.39, 5.16, 6.27, 5.99], "ratio": 0.8}, {"c": "新潟 芝1800m", "races": 202, "f": [3.58, 6.34, 7.75, 5.2, 5.69, 7.46, 7.13, 6.12], "ratio": 0.76}, {"c": "札幌 芝1200m", "races": 198, "f": [7.47, 4.7, 3.05, 3.56, 6.84, 8.35, 7.09, 10.71], "ratio": 0.68}, {"c": "阪神 芝1800m", "races": 196, "f": [6.33, 5.23, 6.65, 7.2, 6.14, 8.48, 5.3, 4.08], "ratio": 1.23}, {"c": "中京 芝1200m", "races": 180, "f": [8.55, 7.98, 6.15, 7.58, 6.11, 4.76, 3.48, 3.61], "ratio": 2.33}, {"c": "京都 芝1200m", "races": 170, "f": [9.06, 8.25, 6.49, 3.86, 4.73, 7.37, 6.22, 3.91], "ratio": 1.71}, {"c": "函館 ダ1700m", "races": 170, "f": [4.76, 6.47, 8.33, 5.07, 9.2, 7.12, 8.04, 7.16], "ratio": 0.74}, {"c": "新潟 芝1200m", "races": 167, "f": [4.44, 5.54, 5.71, 6.33, 7.25, 6.91, 7.36, 4.9], "ratio": 0.82}, {"c": "新潟 芝2000m", "races": 165, "f": [7.01, 6.02, 4.86, 4.86, 8.26, 5.17, 5.63, 8.09], "ratio": 0.94}, {"c": "東京 芝2000m", "races": 151, "f": [9.82, 5.08, 6.62, 6.35, 8.31, 4.33, 5.86, 6.06], "ratio": 1.22}, {"c": "京都 芝1800m", "races": 150, "f": [4.02, 5.95, 7.0, 7.69, 7.74, 6.0, 6.43, 5.03], "ratio": 0.88}], "kikka": [{"year": 2015, "date": "2015-10-25", "going": "良", "winner": "キタサンブラック", "pop": 5, "odds": 13.4, "jockey": "北村宏司", "time": 183.9, "pass_": "5-5-10-8", "last3f": 35.0, "frame": 2, "t3": 38880, "top3": [{"name": "キタサンブラック", "pop": 5}, {"name": "リアルスティール", "pop": 2}, {"name": "リアファル", "pop": 1}]}, {"year": 2016, "date": "2016-10-23", "going": "良", "winner": "サトノダイヤモンド", "pop": 1, "odds": 2.3, "jockey": "ルメール", "time": 183.3, "pass_": "8-8-9-5", "last3f": 34.1, "frame": 2, "t3": 69380, "top3": [{"name": "サトノダイヤモンド", "pop": 1}, {"name": "レインボーライン", "pop": 9}, {"name": "エアスピネル", "pop": 6}]}, {"year": 2017, "date": "2017-10-22", "going": "不良", "winner": "キセキ", "pop": 1, "odds": 4.5, "jockey": "Ｍ．デム", "time": 198.9, "pass_": "14-14-12-7", "last3f": 39.6, "frame": 7, "t3": 559700, "top3": [{"name": "キセキ", "pop": 1}, {"name": "クリンチャー", "pop": 10}, {"name": "ポポカテペトル", "pop": 13}]}, {"year": 2018, "date": "2018-10-21", "going": "良", "winner": "フィエールマン", "pop": 7, "odds": 14.5, "jockey": "ルメール", "time": 186.1, "pass_": "7-7-5-6", "last3f": 33.9, "frame": 6, "t3": 100590, "top3": [{"name": "フィエールマン", "pop": 7}, {"name": "エタリオウ", "pop": 2}, {"name": "ユーキャンスマイル", "pop": 10}]}, {"year": 2019, "date": "2019-10-20", "going": "良", "winner": "ワールドプレミア", "pop": 3, "odds": 6.5, "jockey": "武豊", "time": 186.0, "pass_": "7-6-8-6", "last3f": 35.8, "frame": 3, "t3": 23510, "top3": [{"name": "ワールドプレミア", "pop": 3}, {"name": "サトノルークス", "pop": 8}, {"name": "ヴェロックス", "pop": 1}]}, {"year": 2020, "date": "2020-10-25", "going": "良", "winner": "コントレイル", "pop": 1, "odds": 1.1, "jockey": "福永祐一", "time": 185.5, "pass_": "7-7-5-4", "last3f": 35.2, "frame": 2, "t3": 8740, "top3": [{"name": "コントレイル", "pop": 1}, {"name": "アリストテレス", "pop": 4}, {"name": "サトノフラッグ", "pop": 5}]}, {"year": 2021, "date": "2021-10-24", "going": "良", "winner": "タイトルホルダー", "pop": 4, "odds": 8.0, "jockey": "横山武史", "time": 184.6, "pass_": "1-1-1-1", "last3f": 35.1, "frame": 2, "t3": 79560, "top3": [{"name": "タイトルホルダー", "pop": 4}, {"name": "オーソクレース", "pop": 3}, {"name": "ディヴァインラヴ", "pop": 6}]}, {"year": 2022, "date": "2022-10-23", "going": "良", "winner": "アスクビクターモア", "pop": 2, "odds": 4.1, "jockey": "田辺裕信", "time": 182.4, "pass_": "2-2-2-1", "last3f": 36.9, "frame": 7, "t3": 30010, "top3": [{"name": "アスクビクターモア", "pop": 2}, {"name": "ボルドグフーシュ", "pop": 7}, {"name": "ジャスティンパレス", "pop": 4}]}, {"year": 2023, "date": "2023-10-22", "going": "良", "winner": "ドゥレッツァ", "pop": 4, "odds": 7.3, "jockey": "ルメール", "time": 183.1, "pass_": "1-1-3-2", "last3f": 34.6, "frame": 8, "t3": 12380, "top3": [{"name": "ドゥレッツァ", "pop": 4}, {"name": "タスティエーラ", "pop": 2}, {"name": "ソールオリエンス", "pop": 1}]}, {"year": 2024, "date": "2024-10-20", "going": "良", "winner": "アーバンシック", "pop": 2, "odds": 3.7, "jockey": "ルメール", "time": 184.1, "pass_": "8-8-5-3", "last3f": 35.6, "frame": 7, "t3": 19390, "top3": [{"name": "アーバンシック", "pop": 2}, {"name": "ヘデントール", "pop": 4}, {"name": "アドマイヤテラ", "pop": 7}]}, {"year": 2025, "date": "2025-10-26", "going": "稍重", "winner": "エネルジコ", "pop": 1, "odds": 3.8, "jockey": "ルメール", "time": 184.0, "pass_": "15-14-8-4", "last3f": 35.0, "frame": 5, "t3": 140270, "top3": [{"name": "エネルジコ", "pop": 1}, {"name": "エリキング", "pop": 2}, {"name": "エキサイトバイオ", "pop": 13}]}], "race_jockey": {"months": ["2015-01", "2015-02", "2015-03", "2015-04", "2015-05", "2015-06", "2015-07", "2015-08", "2015-09", "2015-10", "2015-11", "2015-12", "2016-01", "2016-02", "2016-03", "2016-04", "2016-05", "2016-06", "2016-07", "2016-08", "2016-09", "2016-10", "2016-11", "2016-12", "2017-01", "2017-02", "2017-03", "2017-04", "2017-05", "2017-06", "2017-07", "2017-08", "2017-09", "2017-10", "2017-11", "2017-12", "2018-01", "2018-02", "2018-03", "2018-04", "2018-05", "2018-06", "2018-07", "2018-08", "2018-09", "2018-10", "2018-11", "2018-12", "2019-01", "2019-02", "2019-03", "2019-04", "2019-05", "2019-06", "2019-07", "2019-08", "2019-09", "2019-10", "2019-11", "2019-12", "2020-01", "2020-02", "2020-03", "2020-04", "2020-05", "2020-06", "2020-07", "2020-08", "2020-09", "2020-10", "2020-11", "2020-12", "2021-01", "2021-02", "2021-03", "2021-04", "2021-05", "2021-06", "2021-07", "2021-08", "2021-09", "2021-10", "2021-11", "2021-12", "2022-01", "2022-02", "2022-03", "2022-04", "2022-05", "2022-06", "2022-07", "2022-08", "2022-09", "2022-10", "2022-11", "2022-12", "2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06", "2023-07", "2023-08", "2023-09", "2023-10", "2023-11", "2023-12", "2024-01", "2024-02", "2024-03", "2024-04", "2024-05", "2024-06", "2024-07", "2024-08", "2024-09", "2024-10", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"], "names": ["バルジュ", "ベリー", "ルメール", "三浦皇成", "内田博幸", "北村友一", "北村宏司", "吉田豊", "吉田隼人", "和田竜二", "坂井瑠星", "岩田康誠", "岩田望来", "川田将雅", "幸英明", "戸崎圭太", "松山弘平", "松若風馬", "柴山雄一", "横山典弘", "横山武史", "武豊", "浜中俊", "田辺裕信", "福永祐一", "藤岡康太", "蛯名正義", "Ｃ．デム", "Ｍ．デム"], "values": [[4, 12, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 24, 30, 30, 30, 30, 31, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 37, 40, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49, 49], [13, 19, 19, 19, 19, 19, 19, 19, 19, 19, 25, 25, 36, 38, 38, 39, 47, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55], [0, 0, 0, 9, 25, 33, 47, 59, 73, 87, 101, 112, 129, 145, 164, 174, 194, 204, 212, 226, 240, 258, 277, 298, 307, 319, 330, 349, 365, 373, 385, 402, 426, 453, 473, 497, 507, 515, 534, 545, 563, 577, 599, 620, 645, 674, 696, 712, 723, 738, 744, 755, 762, 775, 785, 810, 827, 845, 864, 876, 889, 909, 918, 936, 956, 971, 983, 1004, 1021, 1044, 1067, 1080, 1102, 1118, 1132, 1142, 1159, 1179, 1188, 1202, 1221, 1245, 1264, 1279, 1294, 1309, 1312, 1321, 1329, 1342, 1342, 1346, 1356, 1367, 1380, 1388, 1397, 1415, 1425, 1438, 1449, 1465, 1478, 1487, 1504, 1525, 1544, 1553, 1570, 1584, 1599, 1599, 1615, 1638, 1643, 1661, 1681, 1704, 1716, 1729, 1735, 1740, 1751, 1759, 1772, 1788, 1794, 1807, 1814, 1829, 1859, 1869, 1882, 1902, 1922, 1930, 1949, 1960, 1960, 1968, 1986, 2003], [2, 7, 11, 17, 23, 28, 32, 43, 49, 56, 61, 64, 66, 68, 73, 76, 80, 88, 96, 96, 96, 96, 96, 96, 96, 96, 96, 96, 96, 96, 96, 102, 106, 107, 115, 120, 123, 130, 135, 140, 147, 152, 160, 163, 167, 173, 180, 188, 199, 203, 213, 224, 230, 240, 252, 258, 267, 273, 284, 290, 290, 290, 301, 309, 319, 327, 330, 336, 344, 351, 360, 368, 373, 381, 386, 392, 394, 399, 404, 411, 418, 424, 429, 432, 436, 440, 443, 447, 454, 460, 464, 468, 476, 479, 481, 485, 488, 491, 492, 499, 504, 506, 508, 515, 520, 527, 527, 533, 536, 538, 544, 547, 549, 554, 559, 560, 567, 570, 581, 584, 588, 591, 594, 600, 607, 609, 615, 621, 626, 631, 636, 637, 643, 646, 650, 654, 660, 664, 667, 674, 683, 685], [4, 4, 8, 17, 27, 32, 41, 49, 55, 60, 73, 80, 87, 94, 98, 113, 122, 129, 138, 144, 151, 156, 163, 169, 178, 191, 200, 206, 212, 222, 231, 234, 238, 250, 255, 258, 264, 272, 278, 290, 298, 300, 305, 308, 316, 320, 324, 329, 332, 334, 337, 345, 351, 355, 361, 367, 370, 374, 378, 379, 381, 382, 387, 388, 391, 395, 397, 400, 404, 405, 407, 409, 415, 417, 419, 421, 425, 428, 430, 438, 439, 444, 447, 448, 451, 454, 458, 460, 462, 463, 464, 464, 465, 466, 467, 470, 473, 474, 476, 479, 481, 482, 487, 490, 495, 497, 497, 498, 499, 501, 502, 505, 505, 506, 509, 509, 510, 511, 512, 514, 516, 516, 519, 520, 522, 522, 523, 526, 529, 532, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535], [2, 6, 8, 8, 11, 12, 12, 19, 22, 25, 26, 29, 31, 34, 38, 43, 48, 52, 56, 61, 61, 66, 71, 80, 85, 91, 96, 100, 107, 111, 121, 126, 128, 132, 137, 145, 153, 163, 172, 176, 182, 186, 193, 205, 215, 223, 232, 235, 246, 251, 256, 259, 264, 270, 277, 281, 289, 300, 309, 320, 320, 323, 326, 328, 336, 339, 347, 354, 359, 365, 372, 378, 380, 388, 389, 392, 393, 393, 393, 393, 393, 393, 393, 393, 393, 393, 393, 393, 393, 394, 398, 400, 402, 406, 406, 407, 407, 409, 409, 411, 416, 417, 423, 428, 430, 437, 440, 447, 449, 451, 455, 459, 462, 471, 480, 487, 490, 495, 500, 506, 511, 517, 523, 529, 536, 542, 548, 557, 561, 567, 574, 579, 584, 588, 590, 595, 601, 606, 608, 615, 624, 627], [7, 15, 17, 18, 25, 35, 45, 55, 60, 67, 75, 76, 76, 76, 76, 80, 80, 80, 80, 80, 83, 90, 94, 100, 105, 110, 115, 121, 123, 125, 137, 140, 146, 151, 156, 160, 165, 168, 173, 182, 186, 190, 198, 203, 209, 212, 218, 222, 223, 227, 227, 227, 227, 227, 227, 230, 231, 235, 239, 242, 245, 249, 252, 255, 259, 261, 264, 268, 269, 275, 281, 284, 288, 293, 294, 296, 304, 306, 306, 306, 306, 306, 306, 306, 309, 309, 311, 311, 311, 311, 311, 311, 311, 311, 312, 315, 318, 318, 323, 324, 329, 331, 333, 339, 345, 351, 352, 354, 355, 355, 356, 360, 361, 362, 362, 363, 364, 367, 368, 369, 371, 375, 377, 377, 378, 379, 379, 379, 379, 380, 380, 381, 382, 382, 382, 382, 383, 383, 383, 383, 383, 383], [5, 7, 14, 22, 28, 33, 36, 40, 48, 54, 54, 59, 63, 64, 70, 74, 78, 80, 83, 88, 90, 93, 94, 100, 104, 107, 107, 110, 114, 116, 117, 118, 122, 128, 131, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 133, 134, 134, 134, 136, 138, 142, 143, 144, 145, 149, 151, 152, 154, 158, 158, 162, 162, 162, 163, 167, 169, 173, 174, 175, 177, 180, 180, 182, 182, 183, 184, 186, 186, 189, 190, 191, 192, 193, 195, 196, 197, 198, 201, 203, 203, 204, 208, 210, 210, 210, 212, 213, 216, 217, 223, 223, 224, 225, 229, 232, 235, 239, 239, 241, 242, 245, 245, 249, 249, 251, 251, 254, 254, 256, 258, 262, 263, 264, 264, 265, 267, 268, 268, 269, 269, 271, 272, 273, 275, 275, 275], [2, 4, 11, 16, 21, 24, 31, 36, 37, 44, 50, 51, 55, 59, 63, 67, 71, 73, 78, 87, 91, 99, 104, 106, 113, 120, 124, 136, 139, 148, 158, 165, 170, 180, 186, 187, 190, 194, 198, 202, 203, 206, 213, 214, 214, 216, 221, 228, 231, 239, 241, 247, 250, 256, 259, 265, 270, 272, 279, 287, 291, 297, 303, 308, 320, 326, 333, 340, 344, 354, 362, 378, 384, 394, 403, 412, 421, 427, 433, 443, 446, 454, 462, 465, 473, 481, 488, 496, 504, 509, 519, 523, 529, 537, 543, 548, 552, 554, 563, 566, 568, 570, 574, 579, 579, 582, 586, 589, 591, 597, 602, 602, 602, 602, 602, 602, 602, 603, 605, 606, 606, 607, 607, 607, 611, 612, 613, 613, 613, 615, 617, 618, 619, 623, 627, 629, 632, 634, 635, 637, 638, 639], [3, 6, 12, 16, 18, 22, 24, 30, 35, 40, 46, 48, 51, 56, 63, 70, 78, 88, 92, 98, 100, 109, 113, 117, 127, 130, 142, 149, 159, 165, 175, 182, 193, 202, 207, 213, 214, 220, 228, 232, 240, 244, 255, 262, 275, 278, 279, 284, 288, 291, 300, 303, 310, 318, 328, 333, 338, 343, 349, 350, 356, 360, 370, 372, 379, 383, 384, 389, 394, 397, 406, 410, 416, 422, 429, 433, 438, 441, 443, 444, 447, 453, 455, 458, 463, 468, 474, 477, 480, 486, 490, 494, 498, 505, 507, 507, 507, 512, 514, 518, 525, 528, 532, 535, 540, 549, 551, 551, 555, 562, 567, 569, 575, 579, 584, 587, 587, 587, 587, 587, 587, 589, 590, 591, 593, 596, 599, 599, 600, 600, 603, 606, 606, 606, 606, 606, 606, 606, 606, 606, 606, 606], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 6, 8, 15, 18, 18, 20, 24, 25, 29, 34, 38, 43, 49, 50, 53, 55, 58, 60, 61, 61, 65, 65, 65, 65, 70, 70, 70, 70, 70, 70, 70, 71, 73, 74, 80, 81, 82, 85, 85, 88, 90, 95, 97, 101, 104, 106, 110, 117, 122, 125, 129, 135, 138, 138, 141, 143, 145, 147, 147, 149, 157, 162, 168, 175, 175, 180, 187, 196, 206, 211, 214, 223, 234, 240, 247, 251, 260, 275, 282, 294, 306, 312, 319, 327, 336, 344, 354, 363, 368, 376, 389, 401, 417, 425, 432, 439, 447, 459, 471, 481, 493, 500, 507, 516, 528, 536, 547, 556, 563, 577, 587, 599, 606, 616, 620, 626, 635, 639, 647, 656, 660, 671, 687, 704, 706, 712], [9, 18, 26, 35, 44, 53, 69, 78, 88, 92, 99, 101, 107, 115, 121, 133, 140, 142, 153, 156, 156, 162, 167, 169, 178, 181, 191, 196, 199, 207, 221, 232, 239, 243, 246, 252, 258, 263, 273, 282, 286, 296, 304, 306, 311, 318, 328, 332, 344, 349, 359, 364, 368, 374, 382, 385, 389, 392, 398, 400, 405, 411, 420, 423, 423, 425, 428, 432, 434, 440, 447, 450, 455, 456, 466, 473, 475, 478, 480, 481, 481, 485, 489, 494, 499, 507, 511, 513, 520, 523, 526, 528, 530, 534, 535, 540, 542, 548, 553, 555, 556, 557, 557, 559, 559, 562, 562, 565, 568, 570, 575, 578, 578, 584, 588, 590, 594, 596, 600, 606, 609, 613, 620, 625, 629, 632, 633, 634, 638, 643, 645, 649, 651, 653, 657, 657, 660, 662, 663, 663, 667, 669], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 5, 9, 13, 18, 23, 25, 32, 37, 39, 47, 59, 62, 74, 80, 83, 87, 90, 99, 99, 113, 118, 129, 133, 136, 146, 150, 155, 162, 172, 188, 193, 201, 210, 229, 241, 252, 257, 263, 270, 272, 273, 285, 292, 304, 312, 327, 337, 347, 353, 364, 376, 382, 392, 401, 408, 417, 426, 434, 444, 452, 461, 469, 469, 470, 483, 491, 501, 506, 510, 520, 530, 535, 552, 559, 559, 563, 569, 581, 592, 601, 613, 625, 645, 652, 664, 676, 684, 700, 717, 717], [10, 13, 15, 26, 37, 46, 56, 69, 79, 84, 91, 101, 115, 126, 138, 143, 156, 166, 176, 186, 196, 209, 222, 236, 239, 248, 256, 265, 268, 276, 281, 290, 297, 306, 315, 327, 335, 344, 353, 368, 376, 387, 392, 392, 401, 404, 411, 420, 432, 442, 465, 478, 486, 499, 512, 526, 541, 553, 559, 572, 591, 612, 630, 641, 648, 660, 675, 688, 705, 718, 730, 739, 745, 756, 772, 787, 800, 818, 827, 844, 852, 866, 873, 875, 894, 910, 922, 935, 944, 952, 967, 982, 993, 1004, 1009, 1018, 1034, 1043, 1059, 1074, 1084, 1091, 1105, 1122, 1138, 1150, 1158, 1169, 1186, 1192, 1210, 1223, 1237, 1253, 1256, 1269, 1280, 1290, 1300, 1310, 1320, 1330, 1340, 1343, 1352, 1364, 1373, 1384, 1398, 1407, 1411, 1415, 1427, 1440, 1452, 1454, 1462, 1471, 1478, 1488, 1498, 1504], [8, 14, 16, 22, 26, 35, 41, 47, 52, 56, 59, 64, 66, 72, 72, 76, 82, 85, 90, 95, 98, 102, 109, 118, 126, 131, 137, 140, 145, 146, 158, 166, 173, 176, 176, 183, 190, 192, 197, 203, 209, 214, 220, 230, 235, 242, 244, 244, 244, 246, 257, 263, 269, 275, 278, 282, 287, 292, 296, 305, 314, 317, 322, 326, 336, 341, 346, 352, 355, 359, 366, 370, 377, 383, 392, 401, 408, 414, 419, 421, 429, 440, 449, 451, 455, 461, 466, 472, 479, 483, 488, 492, 498, 500, 505, 509, 515, 524, 530, 536, 540, 543, 547, 553, 557, 557, 558, 561, 563, 567, 569, 571, 572, 578, 581, 588, 590, 598, 601, 605, 607, 613, 620, 628, 631, 642, 645, 645, 645, 645, 645, 645, 646, 648, 656, 658, 664, 669, 671, 677, 681, 683], [8, 17, 34, 48, 59, 69, 76, 84, 91, 102, 113, 130, 148, 162, 173, 191, 206, 225, 247, 258, 272, 287, 300, 317, 323, 332, 347, 365, 383, 399, 429, 438, 453, 464, 482, 488, 498, 506, 510, 526, 532, 546, 558, 562, 573, 585, 593, 603, 609, 616, 628, 639, 651, 664, 680, 684, 695, 704, 707, 707, 707, 707, 707, 707, 707, 717, 724, 731, 739, 748, 759, 763, 773, 778, 783, 784, 792, 798, 809, 815, 827, 835, 841, 851, 859, 870, 879, 886, 902, 907, 921, 937, 945, 963, 973, 987, 1002, 1008, 1015, 1024, 1032, 1042, 1059, 1067, 1076, 1088, 1093, 1099, 1106, 1121, 1135, 1148, 1154, 1167, 1182, 1194, 1202, 1212, 1225, 1232, 1245, 1253, 1266, 1276, 1288, 1294, 1305, 1322, 1337, 1342, 1355, 1364, 1376, 1380, 1386, 1394, 1399, 1403, 1418, 1424, 1428, 1429], [7, 9, 15, 20, 33, 38, 40, 52, 57, 61, 67, 70, 73, 76, 79, 83, 89, 93, 95, 101, 104, 110, 113, 117, 124, 131, 138, 143, 149, 151, 154, 160, 164, 169, 171, 178, 184, 196, 198, 205, 212, 222, 228, 239, 243, 251, 253, 262, 269, 273, 280, 287, 294, 299, 312, 320, 328, 336, 345, 353, 363, 372, 384, 395, 400, 412, 421, 429, 444, 456, 469, 480, 496, 504, 522, 523, 530, 539, 552, 563, 574, 588, 598, 610, 627, 633, 637, 640, 646, 659, 673, 680, 691, 704, 713, 728, 737, 747, 759, 766, 773, 781, 794, 800, 809, 823, 834, 841, 852, 860, 871, 875, 880, 892, 904, 912, 924, 938, 947, 954, 966, 970, 984, 990, 999, 1010, 1024, 1040, 1046, 1064, 1070, 1082, 1092, 1103, 1120, 1128, 1137, 1145, 1161, 1170, 1187, 1195], [4, 7, 12, 23, 27, 30, 32, 39, 42, 50, 53, 60, 66, 72, 75, 80, 85, 89, 96, 101, 104, 107, 110, 112, 117, 124, 131, 134, 135, 136, 139, 144, 146, 150, 150, 154, 156, 163, 173, 179, 183, 186, 191, 192, 192, 197, 198, 207, 208, 215, 216, 218, 222, 226, 233, 243, 248, 250, 251, 255, 256, 260, 267, 268, 277, 281, 283, 287, 291, 293, 297, 298, 301, 304, 308, 310, 314, 318, 320, 325, 330, 333, 338, 338, 340, 346, 349, 350, 354, 357, 361, 363, 366, 371, 372, 374, 378, 381, 383, 385, 389, 396, 399, 401, 402, 403, 409, 412, 415, 418, 418, 421, 421, 423, 429, 429, 429, 429, 429, 429, 429, 431, 432, 432, 435, 436, 439, 442, 446, 450, 451, 453, 457, 462, 465, 469, 475, 479, 480, 489, 493, 496], [5, 10, 20, 24, 32, 38, 47, 51, 52, 58, 63, 72, 79, 82, 86, 89, 96, 99, 101, 103, 110, 115, 118, 126, 129, 131, 135, 138, 141, 143, 145, 147, 148, 150, 151, 151, 156, 159, 161, 163, 163, 163, 163, 165, 167, 168, 171, 176, 178, 183, 183, 187, 189, 190, 193, 193, 195, 198, 199, 200, 200, 201, 203, 204, 205, 205, 207, 209, 211, 211, 211, 211, 211, 212, 212, 214, 214, 214, 215, 216, 217, 217, 217, 220, 220, 221, 222, 222, 223, 223, 223, 225, 225, 225, 226, 226, 226, 226, 227, 227, 228, 228, 230, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231, 231], [8, 11, 15, 17, 21, 30, 34, 42, 43, 50, 54, 57, 66, 74, 78, 82, 85, 88, 91, 93, 95, 103, 106, 111, 116, 121, 123, 126, 129, 133, 137, 138, 143, 146, 149, 156, 163, 170, 173, 176, 180, 184, 187, 191, 194, 199, 202, 205, 213, 215, 219, 222, 223, 224, 225, 227, 233, 236, 243, 248, 256, 259, 263, 266, 271, 275, 278, 287, 294, 300, 303, 311, 313, 317, 319, 320, 324, 327, 328, 331, 331, 332, 334, 337, 343, 348, 350, 351, 359, 360, 360, 362, 365, 368, 369, 373, 378, 381, 387, 391, 392, 392, 395, 397, 401, 404, 405, 409, 412, 414, 415, 415, 419, 420, 421, 421, 421, 425, 427, 428, 432, 438, 441, 444, 446, 451, 455, 457, 459, 462, 465, 469, 472, 472, 474, 478, 482, 487, 489, 495, 496, 497], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 5, 8, 8, 10, 13, 13, 18, 20, 20, 25, 27, 30, 34, 36, 38, 41, 45, 48, 48, 56, 63, 66, 73, 77, 82, 86, 88, 92, 97, 102, 107, 112, 117, 127, 132, 141, 150, 164, 171, 177, 184, 196, 204, 209, 214, 222, 230, 237, 250, 265, 272, 280, 289, 300, 312, 322, 335, 344, 352, 363, 379, 390, 402, 410, 416, 427, 444, 454, 461, 471, 475, 486, 502, 511, 520, 529, 543, 553, 564, 570, 584, 595, 598, 611, 615, 630, 637, 643, 648, 655, 661, 672, 688, 691, 699, 708, 720, 737, 743, 752, 760, 765, 777, 784, 794, 807, 814, 821, 832, 844, 849, 852], [9, 16, 26, 36, 44, 53, 61, 65, 76, 88, 100, 106, 121, 128, 130, 135, 141, 145, 152, 153, 158, 170, 174, 180, 192, 198, 200, 210, 214, 224, 230, 238, 245, 256, 259, 262, 275, 282, 291, 293, 294, 297, 305, 310, 320, 327, 332, 338, 349, 364, 372, 380, 388, 394, 403, 412, 423, 432, 442, 449, 462, 477, 489, 495, 501, 509, 515, 522, 534, 541, 554, 564, 569, 578, 586, 586, 590, 594, 601, 606, 617, 620, 632, 639, 646, 653, 659, 666, 670, 675, 683, 694, 697, 703, 708, 712, 719, 727, 730, 739, 748, 751, 757, 767, 778, 785, 785, 786, 796, 804, 811, 817, 822, 832, 841, 853, 857, 865, 870, 873, 879, 881, 890, 895, 898, 910, 916, 924, 928, 936, 941, 945, 951, 956, 966, 972, 977, 985, 993, 999, 1003, 1005], [10, 21, 33, 44, 50, 55, 59, 74, 79, 85, 93, 98, 105, 105, 105, 105, 109, 114, 123, 136, 143, 154, 160, 161, 162, 172, 176, 185, 186, 195, 201, 204, 205, 209, 217, 221, 226, 231, 235, 239, 245, 251, 254, 264, 268, 280, 282, 287, 290, 298, 305, 307, 312, 318, 322, 328, 329, 332, 335, 335, 335, 335, 344, 344, 347, 353, 357, 359, 363, 364, 366, 373, 377, 384, 389, 392, 394, 396, 402, 404, 406, 409, 411, 415, 418, 423, 426, 427, 435, 438, 442, 447, 449, 455, 455, 459, 464, 468, 472, 477, 479, 483, 489, 492, 493, 496, 498, 499, 503, 506, 508, 508, 512, 516, 521, 522, 526, 529, 531, 535, 538, 541, 545, 547, 551, 554, 557, 560, 564, 567, 568, 568, 571, 572, 574, 578, 582, 586, 590, 597, 601, 603], [8, 10, 20, 25, 32, 36, 42, 51, 59, 63, 73, 77, 83, 89, 96, 103, 110, 114, 120, 125, 133, 141, 152, 163, 179, 186, 195, 210, 215, 221, 222, 223, 233, 235, 239, 247, 262, 269, 273, 280, 287, 291, 305, 310, 317, 320, 327, 332, 337, 342, 350, 363, 368, 382, 389, 396, 402, 408, 414, 419, 422, 430, 437, 442, 448, 453, 461, 466, 472, 483, 487, 493, 506, 515, 517, 520, 524, 531, 534, 537, 541, 544, 550, 559, 561, 565, 572, 581, 586, 592, 602, 605, 613, 620, 626, 631, 639, 642, 647, 654, 659, 664, 673, 674, 676, 677, 683, 688, 692, 695, 700, 704, 706, 712, 714, 718, 720, 724, 728, 729, 731, 734, 738, 740, 744, 748, 752, 753, 753, 753, 753, 753, 755, 757, 761, 764, 767, 769, 772, 783, 786, 789], [9, 25, 39, 50, 62, 69, 77, 96, 103, 121, 121, 121, 121, 123, 137, 150, 157, 163, 186, 197, 205, 217, 226, 227, 235, 241, 249, 256, 266, 281, 299, 301, 316, 325, 332, 343, 347, 360, 369, 378, 384, 393, 405, 411, 419, 425, 437, 446, 457, 465, 474, 483, 487, 501, 509, 522, 533, 542, 545, 553, 561, 570, 579, 591, 596, 608, 618, 634, 646, 663, 678, 687, 703, 713, 721, 730, 741, 750, 768, 779, 794, 804, 807, 810, 810, 818, 833, 840, 847, 855, 865, 879, 887, 898, 904, 911, 923, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929, 929], [4, 12, 21, 23, 28, 35, 40, 42, 46, 48, 54, 59, 63, 71, 84, 87, 87, 89, 94, 100, 103, 108, 112, 121, 123, 127, 131, 132, 138, 145, 148, 152, 153, 157, 159, 165, 173, 178, 185, 189, 193, 197, 202, 211, 216, 221, 223, 224, 227, 234, 244, 248, 255, 258, 261, 266, 268, 271, 277, 280, 285, 290, 293, 297, 301, 305, 307, 312, 314, 323, 324, 330, 334, 339, 342, 348, 351, 356, 359, 360, 362, 367, 372, 377, 382, 388, 393, 396, 405, 408, 411, 414, 420, 422, 424, 428, 433, 440, 442, 447, 454, 464, 467, 470, 475, 482, 484, 491, 496, 505, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519, 519], [5, 16, 23, 30, 42, 44, 51, 54, 64, 71, 80, 87, 95, 107, 109, 119, 122, 129, 136, 140, 143, 145, 146, 149, 153, 154, 154, 162, 164, 165, 169, 175, 176, 177, 177, 183, 187, 189, 192, 194, 197, 201, 204, 205, 206, 207, 209, 215, 217, 219, 221, 223, 223, 224, 224, 226, 226, 228, 230, 230, 230, 230, 230, 230, 232, 232, 233, 233, 233, 233, 233, 234, 234, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237, 237], [16, 24, 27, 27, 27, 27, 27, 27, 27, 31, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 34, 38, 48, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 72, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 81, 82, 99, 107, 107, 107, 107, 107, 107, 107, 107, 107, 110, 126, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 130, 138, 151, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 161, 185, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198], [0, 0, 14, 20, 25, 36, 50, 65, 80, 98, 104, 118, 137, 146, 164, 176, 179, 187, 202, 215, 225, 237, 245, 250, 258, 276, 292, 312, 320, 332, 347, 360, 375, 395, 409, 421, 434, 444, 463, 473, 484, 502, 519, 527, 542, 552, 561, 574, 584, 595, 607, 613, 620, 624, 627, 636, 649, 655, 661, 665, 672, 679, 687, 694, 702, 704, 707, 712, 718, 725, 730, 730, 734, 740, 745, 749, 758, 763, 772, 780, 789, 797, 800, 805, 814, 821, 824, 828, 836, 840, 846, 850, 855, 863, 868, 877, 881, 884, 890, 895, 898, 900, 905, 905, 913, 917, 919, 921, 921, 925, 933, 934, 935, 937, 939, 945, 946, 950, 957, 963, 966, 969, 971, 973, 974, 975, 975, 975, 975, 975, 975, 977, 977, 977, 977, 977, 979, 981, 983, 987, 990, 992]]}, "race_sire": {"months": ["2015-01", "2015-02", "2015-03", "2015-04", "2015-05", "2015-06", "2015-07", "2015-08", "2015-09", "2015-10", "2015-11", "2015-12", "2016-01", "2016-02", "2016-03", "2016-04", "2016-05", "2016-06", "2016-07", "2016-08", "2016-09", "2016-10", "2016-11", "2016-12", "2017-01", "2017-02", "2017-03", "2017-04", "2017-05", "2017-06", "2017-07", "2017-08", "2017-09", "2017-10", "2017-11", "2017-12", "2018-01", "2018-02", "2018-03", "2018-04", "2018-05", "2018-06", "2018-07", "2018-08", "2018-09", "2018-10", "2018-11", "2018-12", "2019-01", "2019-02", "2019-03", "2019-04", "2019-05", "2019-06", "2019-07", "2019-08", "2019-09", "2019-10", "2019-11", "2019-12", "2020-01", "2020-02", "2020-03", "2020-04", "2020-05", "2020-06", "2020-07", "2020-08", "2020-09", "2020-10", "2020-11", "2020-12", "2021-01", "2021-02", "2021-03", "2021-04", "2021-05", "2021-06", "2021-07", "2021-08", "2021-09", "2021-10", "2021-11", "2021-12", "2022-01", "2022-02", "2022-03", "2022-04", "2022-05", "2022-06", "2022-07", "2022-08", "2022-09", "2022-10", "2022-11", "2022-12", "2023-01", "2023-02", "2023-03", "2023-04", "2023-05", "2023-06", "2023-07", "2023-08", "2023-09", "2023-10", "2023-11", "2023-12", "2024-01", "2024-02", "2024-03", "2024-04", "2024-05", "2024-06", "2024-07", "2024-08", "2024-09", "2024-10", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"], "names": ["エピファネイア", "エンパイアメーカー", "オルフェーヴル", "キズナ", "キングカメハメハ", "キングヘイロー", "キンシャサノキセキ", "クロフネ", "ゴールドアリュール", "サウスヴィグラス", "シンボリクリスエス", "ステイゴールド", "ゼンノロブロイ", "ダイワメジャー", "ディープインパクト", "ネオユニヴァース", "ハーツクライ", "ハービンジャー", "ヘニーヒューズ", "マンハッタンカフェ", "メイショウサムソン", "ルーラーシップ", "ロードカナロア"], "values": [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 8, 13, 19, 24, 31, 33, 37, 42, 46, 52, 54, 61, 75, 82, 89, 96, 102, 110, 119, 121, 127, 130, 141, 150, 159, 165, 178, 183, 192, 199, 202, 207, 214, 228, 238, 247, 256, 264, 279, 285, 292, 299, 307, 314, 316, 323, 327, 341, 351, 364, 376, 387, 391, 400, 410, 416, 423, 433, 442, 448, 461, 468, 477, 483, 489, 493, 503, 519, 526, 543, 551, 564, 575, 581, 595, 602, 609, 624, 630, 640, 643, 655, 664, 678, 690, 696, 705], [1, 6, 11, 12, 15, 19, 27, 35, 41, 44, 51, 58, 64, 72, 77, 84, 90, 95, 105, 107, 108, 121, 125, 129, 137, 140, 153, 160, 168, 171, 174, 181, 184, 195, 199, 201, 213, 224, 230, 236, 239, 244, 246, 249, 253, 259, 261, 267, 273, 282, 291, 296, 298, 299, 303, 304, 306, 313, 313, 315, 315, 316, 321, 324, 324, 327, 328, 328, 329, 330, 330, 330, 332, 332, 333, 333, 334, 334, 335, 335, 335, 335, 335, 335, 337, 337, 338, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4, 5, 7, 7, 10, 13, 17, 24, 27, 33, 41, 48, 53, 60, 69, 74, 77, 82, 86, 95, 104, 109, 121, 130, 142, 151, 156, 170, 180, 191, 205, 214, 222, 231, 235, 246, 257, 263, 269, 280, 286, 297, 307, 312, 321, 332, 340, 351, 361, 365, 373, 381, 386, 391, 397, 402, 410, 416, 422, 431, 435, 438, 444, 450, 455, 459, 461, 465, 471, 472, 476, 483, 484, 487, 494, 498, 500, 502, 503, 507, 510, 514, 520, 521, 528, 531, 533, 535, 536, 538, 540, 544, 549, 552, 555, 559, 564, 567, 568, 568, 572, 577, 580, 587, 589, 592, 595, 598, 601, 605, 605], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 5, 11, 18, 21, 27, 33, 39, 47, 62, 66, 77, 86, 90, 104, 110, 125, 135, 144, 161, 169, 182, 192, 208, 215, 222, 229, 235, 244, 254, 263, 276, 284, 295, 303, 314, 326, 340, 352, 357, 374, 384, 394, 408, 415, 426, 441, 448, 459, 471, 482, 492, 503, 515, 528, 542, 555, 580, 592, 607, 629, 643, 661, 676, 695, 705, 717, 729, 744, 767, 781, 792, 806, 818, 832, 844, 852, 869, 880, 888, 907, 923, 933, 943, 959, 968, 987, 997, 1002], [21, 47, 68, 86, 109, 117, 134, 151, 163, 180, 211, 224, 244, 261, 278, 297, 313, 325, 341, 357, 365, 379, 392, 411, 428, 439, 448, 461, 474, 484, 492, 499, 515, 531, 544, 559, 566, 578, 593, 604, 620, 630, 641, 651, 661, 673, 682, 691, 695, 703, 715, 719, 733, 740, 745, 757, 766, 775, 789, 792, 800, 808, 816, 823, 832, 840, 848, 853, 862, 874, 878, 893, 901, 904, 918, 928, 940, 950, 955, 967, 974, 983, 987, 999, 1014, 1023, 1031, 1040, 1048, 1055, 1058, 1065, 1067, 1078, 1085, 1092, 1096, 1097, 1099, 1107, 1113, 1115, 1118, 1121, 1121, 1125, 1126, 1130, 1132, 1136, 1139, 1141, 1142, 1144, 1144, 1144, 1144, 1146, 1150, 1150, 1151, 1151, 1152, 1152, 1154, 1154, 1154, 1154, 1154, 1156, 1157, 1158, 1158, 1158, 1158, 1158, 1158, 1158, 1158, 1158, 1158, 1158], [7, 10, 11, 15, 18, 21, 23, 23, 25, 25, 27, 27, 30, 31, 32, 34, 35, 36, 37, 37, 38, 38, 39, 41, 41, 41, 43, 45, 47, 49, 54, 56, 57, 59, 59, 60, 61, 62, 65, 67, 70, 71, 73, 74, 74, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 88, 88, 90, 93, 95, 95, 95, 96, 97, 97, 98, 99, 99, 100, 100, 100, 101, 102, 104, 105, 105, 106, 107, 107, 107, 107, 107, 109, 109, 109, 111, 111, 111, 111, 111, 113, 113, 113, 113, 113, 113, 113, 113, 113, 114, 114, 114, 114, 114, 114, 114, 114, 114, 114, 114, 115, 116, 116, 116, 116, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117, 117], [3, 5, 10, 11, 16, 17, 23, 27, 37, 42, 47, 53, 61, 69, 71, 75, 81, 87, 92, 94, 98, 111, 114, 118, 123, 130, 135, 145, 150, 152, 162, 166, 168, 175, 182, 188, 194, 198, 204, 212, 215, 220, 224, 232, 237, 241, 249, 255, 261, 262, 269, 275, 280, 287, 291, 300, 305, 307, 315, 321, 329, 332, 337, 344, 355, 359, 364, 369, 374, 377, 381, 384, 388, 389, 396, 398, 408, 413, 415, 418, 421, 429, 433, 436, 439, 441, 445, 447, 452, 457, 465, 468, 472, 479, 486, 489, 494, 497, 499, 503, 508, 513, 517, 518, 520, 521, 523, 526, 529, 533, 535, 536, 537, 537, 538, 539, 539, 539, 542, 547, 551, 551, 552, 553, 553, 554, 558, 558, 559, 559, 560, 560, 560, 562, 562, 562, 563, 563, 564, 564, 564, 564], [7, 13, 21, 36, 42, 51, 56, 64, 66, 73, 83, 90, 102, 111, 118, 132, 136, 149, 156, 164, 169, 173, 181, 185, 191, 201, 207, 219, 229, 238, 249, 250, 257, 266, 276, 282, 289, 295, 306, 315, 322, 328, 333, 340, 344, 348, 353, 363, 373, 378, 387, 391, 393, 398, 403, 407, 411, 415, 418, 422, 428, 433, 439, 441, 448, 451, 455, 458, 461, 466, 467, 471, 476, 477, 481, 488, 489, 491, 492, 495, 496, 503, 503, 505, 507, 509, 509, 510, 511, 513, 514, 515, 517, 517, 518, 518, 519, 520, 521, 521, 523, 523, 524, 524, 525, 526, 526, 526, 526, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 527, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528, 528], [10, 14, 18, 27, 40, 42, 46, 52, 57, 65, 76, 84, 91, 96, 108, 113, 119, 127, 134, 145, 152, 159, 167, 174, 181, 188, 192, 199, 200, 210, 220, 222, 230, 238, 246, 254, 261, 266, 271, 279, 284, 293, 304, 312, 324, 333, 343, 349, 359, 365, 373, 381, 387, 396, 401, 409, 416, 423, 427, 436, 443, 450, 461, 468, 475, 479, 480, 487, 490, 493, 496, 498, 499, 502, 507, 510, 515, 516, 520, 520, 521, 521, 521, 522, 522, 526, 528, 529, 529, 530, 530, 530, 531, 531, 531, 531, 531, 531, 533, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 534, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535, 535], [7, 13, 17, 22, 23, 30, 34, 38, 41, 48, 53, 55, 59, 60, 63, 72, 74, 78, 87, 92, 95, 101, 104, 110, 119, 122, 129, 136, 137, 139, 146, 148, 151, 156, 160, 166, 172, 176, 182, 188, 191, 194, 198, 201, 205, 212, 214, 214, 221, 229, 236, 240, 241, 247, 252, 259, 262, 269, 273, 276, 279, 284, 289, 294, 298, 304, 309, 318, 322, 325, 327, 329, 332, 335, 338, 340, 344, 347, 349, 353, 354, 357, 362, 363, 366, 367, 368, 369, 370, 370, 372, 372, 374, 374, 374, 374, 375, 375, 375, 375, 375, 375, 375, 375, 375, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376, 376], [5, 9, 18, 27, 33, 42, 48, 58, 61, 66, 67, 74, 82, 85, 91, 95, 100, 103, 108, 112, 118, 124, 126, 131, 141, 143, 147, 152, 158, 164, 167, 172, 175, 179, 185, 188, 188, 190, 195, 198, 206, 209, 215, 219, 222, 226, 230, 233, 236, 237, 240, 240, 241, 244, 245, 248, 251, 254, 257, 257, 258, 261, 264, 264, 264, 264, 265, 267, 267, 268, 269, 272, 272, 273, 273, 273, 275, 275, 275, 276, 277, 279, 280, 280, 280, 280, 281, 282, 283, 283, 284, 284, 285, 285, 286, 286, 287, 287, 287, 287, 287, 288, 288, 288, 288, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289, 289], [6, 13, 22, 28, 41, 53, 67, 82, 91, 98, 107, 115, 126, 135, 141, 149, 162, 171, 184, 193, 200, 212, 220, 230, 238, 250, 263, 278, 290, 301, 318, 331, 344, 353, 361, 374, 386, 391, 402, 412, 419, 427, 440, 447, 452, 462, 470, 478, 485, 492, 499, 509, 518, 522, 524, 529, 533, 539, 544, 545, 549, 552, 555, 560, 565, 566, 569, 569, 570, 571, 572, 573, 575, 577, 578, 578, 579, 581, 582, 582, 584, 584, 584, 585, 585, 587, 587, 588, 588, 589, 590, 590, 590, 591, 592, 592, 592, 592, 592, 592, 592, 592, 594, 594, 594, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 595, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596, 596], [13, 17, 27, 32, 49, 56, 67, 78, 86, 91, 95, 103, 108, 117, 120, 128, 138, 145, 152, 160, 163, 172, 176, 181, 186, 190, 193, 196, 201, 204, 207, 211, 214, 218, 219, 223, 226, 236, 237, 240, 245, 246, 247, 251, 252, 252, 255, 257, 259, 260, 261, 264, 267, 271, 271, 273, 275, 279, 282, 283, 284, 286, 287, 288, 288, 288, 289, 289, 289, 290, 292, 293, 294, 295, 295, 296, 296, 296, 296, 296, 296, 296, 296, 297, 297, 299, 301, 301, 301, 301, 301, 301, 301, 301, 302, 303, 304, 304, 304, 304, 305, 305, 305, 305, 305, 305, 305, 305, 305, 306, 306, 306, 307, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 308, 309, 309, 309, 309, 309, 309], [11, 19, 31, 39, 49, 57, 66, 81, 90, 107, 120, 133, 149, 161, 176, 183, 197, 208, 221, 230, 237, 255, 266, 280, 289, 300, 312, 328, 337, 343, 358, 372, 386, 401, 407, 414, 423, 430, 439, 450, 457, 471, 482, 488, 495, 508, 519, 529, 535, 540, 548, 555, 565, 569, 578, 587, 594, 602, 607, 614, 623, 630, 639, 645, 649, 661, 669, 676, 682, 686, 694, 704, 711, 721, 728, 736, 742, 750, 760, 764, 770, 776, 779, 783, 794, 797, 806, 811, 825, 832, 839, 847, 851, 864, 870, 875, 879, 888, 891, 899, 904, 908, 918, 922, 925, 929, 933, 935, 942, 946, 953, 957, 960, 963, 965, 968, 971, 975, 978, 980, 982, 985, 988, 991, 993, 995, 996, 998, 1000, 1000, 1001, 1002, 1002, 1004, 1006, 1007, 1010, 1012, 1012, 1012, 1012, 1012], [10, 28, 45, 64, 95, 109, 125, 148, 162, 186, 206, 224, 249, 269, 291, 311, 328, 345, 361, 384, 397, 417, 433, 454, 471, 494, 515, 535, 556, 574, 598, 618, 632, 658, 682, 705, 720, 735, 760, 784, 797, 811, 837, 871, 890, 914, 943, 970, 993, 1016, 1035, 1063, 1082, 1100, 1114, 1140, 1164, 1191, 1211, 1227, 1243, 1279, 1301, 1311, 1340, 1366, 1379, 1394, 1414, 1445, 1469, 1484, 1504, 1527, 1546, 1564, 1590, 1603, 1616, 1632, 1647, 1665, 1686, 1697, 1715, 1734, 1745, 1764, 1782, 1789, 1803, 1818, 1828, 1841, 1849, 1857, 1866, 1872, 1884, 1893, 1900, 1909, 1914, 1918, 1921, 1926, 1933, 1937, 1938, 1943, 1950, 1952, 1953, 1954, 1958, 1958, 1959, 1963, 1966, 1966, 1967, 1970, 1971, 1972, 1972, 1972, 1973, 1974, 1976, 1978, 1978, 1978, 1980, 1980, 1980, 1981, 1982, 1982, 1982, 1982, 1982, 1983], [8, 16, 27, 31, 42, 51, 57, 63, 72, 80, 88, 94, 105, 111, 116, 121, 124, 127, 131, 140, 143, 151, 153, 155, 166, 172, 178, 183, 188, 191, 196, 201, 204, 208, 209, 210, 217, 221, 223, 226, 231, 235, 241, 244, 246, 252, 256, 260, 262, 266, 266, 267, 268, 269, 273, 276, 280, 283, 284, 285, 288, 292, 297, 299, 303, 303, 306, 311, 311, 312, 312, 313, 314, 315, 315, 318, 319, 320, 323, 325, 325, 326, 327, 327, 327, 328, 328, 328, 328, 328, 329, 330, 330, 330, 330, 330, 330, 330, 330, 330, 331, 331, 331, 331, 332, 333, 333, 333, 334, 335, 335, 335, 336, 336, 336, 337, 337, 337, 337, 337, 338, 339, 339, 339, 339, 339, 339, 339, 339, 339, 339, 340, 340, 340, 340, 340, 340, 340, 340, 340, 340, 340], [11, 24, 37, 43, 59, 69, 79, 89, 100, 111, 116, 123, 131, 134, 144, 151, 164, 170, 178, 190, 194, 205, 218, 231, 240, 247, 257, 273, 284, 291, 303, 311, 318, 332, 339, 351, 361, 374, 387, 406, 417, 424, 440, 450, 464, 476, 486, 495, 501, 512, 524, 536, 545, 561, 577, 598, 611, 624, 637, 646, 659, 672, 684, 695, 712, 719, 726, 743, 748, 757, 771, 782, 790, 801, 812, 824, 838, 853, 861, 866, 872, 881, 891, 902, 915, 931, 942, 955, 966, 973, 980, 988, 1001, 1011, 1020, 1027, 1035, 1044, 1052, 1061, 1071, 1076, 1081, 1089, 1101, 1112, 1115, 1124, 1131, 1137, 1142, 1148, 1152, 1155, 1160, 1165, 1167, 1173, 1175, 1176, 1178, 1181, 1183, 1186, 1190, 1192, 1195, 1198, 1200, 1202, 1203, 1204, 1206, 1206, 1207, 1208, 1208, 1210, 1211, 1212, 1212, 1212], [4, 8, 11, 15, 21, 31, 36, 44, 49, 57, 63, 69, 77, 83, 89, 95, 105, 111, 119, 133, 137, 146, 153, 168, 170, 176, 181, 190, 197, 204, 211, 219, 223, 231, 236, 245, 251, 259, 269, 276, 282, 290, 302, 306, 318, 322, 327, 333, 339, 346, 356, 364, 370, 379, 388, 394, 396, 400, 401, 405, 413, 418, 420, 424, 429, 432, 435, 444, 448, 451, 454, 459, 460, 464, 469, 470, 473, 478, 483, 491, 495, 502, 506, 510, 520, 526, 529, 535, 542, 547, 552, 554, 557, 563, 569, 580, 588, 597, 604, 609, 617, 622, 634, 641, 645, 649, 656, 658, 666, 670, 677, 680, 693, 696, 702, 710, 713, 715, 717, 720, 721, 721, 724, 728, 730, 733, 736, 741, 744, 744, 745, 749, 751, 752, 754, 755, 758, 760, 761, 764, 764, 764], [0, 0, 0, 0, 2, 2, 2, 2, 4, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 10, 12, 14, 17, 24, 33, 38, 45, 48, 54, 58, 61, 68, 69, 72, 81, 87, 99, 103, 112, 118, 123, 130, 140, 144, 153, 158, 167, 177, 183, 193, 198, 208, 215, 223, 229, 234, 239, 243, 249, 260, 271, 284, 293, 299, 305, 318, 327, 332, 337, 344, 353, 360, 367, 373, 383, 386, 397, 402, 407, 414, 419, 427, 437, 441, 450, 457, 468, 475, 484, 490, 497, 506, 514, 524, 528, 534, 540, 544, 548, 557, 561, 566, 570, 573, 579, 583, 588, 592, 598, 599, 607, 613, 615, 618, 621, 624, 626, 628, 631, 633, 634, 636, 639, 641, 645, 647, 648, 649, 652, 654, 656], [7, 21, 33, 40, 45, 48, 58, 71, 76, 83, 84, 90, 103, 109, 118, 127, 133, 141, 154, 160, 164, 175, 181, 192, 196, 208, 217, 223, 231, 240, 245, 248, 253, 258, 263, 267, 279, 285, 293, 299, 309, 314, 321, 326, 332, 341, 344, 347, 352, 356, 365, 368, 371, 376, 377, 381, 383, 383, 384, 385, 386, 387, 387, 387, 391, 392, 392, 395, 396, 398, 400, 400, 400, 402, 402, 404, 406, 406, 406, 406, 406, 408, 408, 410, 410, 410, 411, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 412, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413, 413], [7, 12, 18, 21, 24, 27, 28, 33, 38, 47, 49, 52, 57, 60, 64, 66, 72, 75, 80, 81, 82, 84, 88, 89, 90, 93, 95, 97, 99, 100, 103, 106, 108, 108, 112, 114, 116, 116, 118, 119, 122, 127, 129, 130, 130, 131, 131, 132, 133, 133, 137, 139, 142, 145, 145, 145, 148, 150, 152, 152, 153, 154, 156, 159, 160, 160, 162, 162, 162, 166, 167, 167, 169, 171, 172, 173, 174, 175, 178, 178, 180, 180, 180, 180, 181, 182, 184, 186, 187, 188, 189, 190, 190, 192, 193, 194, 194, 194, 194, 194, 195, 196, 196, 196, 196, 196, 196, 196, 196, 197, 197, 197, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 198, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 5, 8, 9, 12, 20, 23, 29, 32, 38, 45, 48, 58, 68, 74, 80, 88, 98, 104, 115, 121, 129, 138, 146, 155, 164, 172, 184, 188, 198, 207, 217, 228, 237, 245, 258, 270, 279, 285, 287, 295, 307, 315, 330, 340, 351, 367, 379, 389, 398, 400, 414, 423, 429, 442, 453, 463, 477, 490, 498, 505, 517, 528, 540, 543, 557, 566, 573, 586, 593, 602, 605, 611, 619, 624, 633, 640, 647, 657, 667, 672, 687, 688, 700, 702, 709, 718, 724, 730, 736, 740, 749, 757, 768, 777, 783, 787, 794, 799, 802, 809, 814, 818, 822, 826, 829, 830, 835, 839, 846, 846, 849, 853, 854, 856, 859, 862, 863, 867, 867, 868, 873, 873, 874], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 5, 7, 13, 22, 29, 37, 44, 50, 58, 66, 71, 77, 91, 96, 105, 120, 134, 147, 159, 170, 178, 190, 201, 218, 238, 255, 262, 279, 294, 307, 312, 330, 351, 364, 379, 391, 402, 417, 427, 445, 461, 477, 496, 512, 528, 542, 557, 574, 585, 600, 607, 622, 632, 643, 669, 691, 703, 718, 736, 746, 764, 775, 781, 799, 811, 825, 843, 860, 870, 884, 899, 912, 923, 933, 944, 954, 968, 982, 996, 1013, 1032, 1050, 1062, 1074, 1084, 1093, 1100, 1108, 1120, 1135, 1145, 1168, 1178, 1187, 1198, 1210, 1220, 1234, 1242, 1246, 1256, 1271, 1280, 1290, 1296, 1304, 1313, 1326, 1333, 1346, 1351, 1352]]}};
+const $ = s => document.querySelector(s);
+const fmt = (n, d = 0) => Number(n).toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const JNAME = { 'Ｃ．デム': 'C.デムーロ', 'Ｍ．デム': 'M.デムーロ', 'バルジュ': 'バルジュー' };
+const jn = s => JNAME[s] || s;
+const FRAME = ['#ffffff', '#1d1d1d', '#e60012', '#0068b7', '#ffe100', '#00a650', '#f39800', '#f5a6c6'];
+const ymd = s => { const [y, m, d] = s.split('-'); return `${y}年${+m}月${+d}日`; };
+
+/* ---------- hero board ---------- */
+$('#board').innerHTML = [
+  [D.hero.races, 'レース'], [D.hero.runs, '出走（のべ頭数）'], [D.hero.horses, '頭の馬'], [D.hero.payouts, '件の払戻']
+].map(([v, l]) => `<div><b class="cu" data-to="${v}">${fmt(v)}</b><span>${l}</span></div>`).join('');
+
+/* ---------- count up ---------- */
+function countUp(el) {
+  const to = +el.dataset.to, dec = +(el.dataset.dec || 0), pre = el.dataset.pre || '', suf = el.dataset.suf || '';
+  const show = v => el.textContent = pre + fmt(v, dec) + suf;
+  if (reduce) return show(to);
+  const t0 = performance.now(), dur = +(el.dataset.dur || 1400);
+  (function step(t) { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); show(to * e); if (p < 1) requestAnimationFrame(step); })(t0);
+}
+const big = (to, o = {}) => `<div class="big ${o.s ? 's' : ''}" data-to="${to}" data-dec="${o.dec || 0}" data-pre="${o.pre || ''}" data-suf="${o.suf || ''}">${o.pre || ''}${fmt(to, o.dec || 0)}${o.suf || ''}</div>`;
+
+/* ---------- card chart helpers (dark tote board) ---------- */
+function vbars(vals, labels, { hi = [], fmtv = v => v, valsAt = null, colors = null, h = 150, w = 300, max = null, stroke = false } = {}) {
+  const n = vals.length, gap = Math.max(3, 60 / n), bw = (w - gap * (n - 1)) / n, top = 22, bot = 20, ph = h - top - bot;
+  const M = max || Math.max(...vals);
+  const showAt = valsAt || hi;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img">`;
+  vals.forEach((v, i) => {
+    const x = i * (bw + gap), bh = Math.max(1.5, v / M * ph), y = top + ph - bh, on = hi.includes(i);
+    const fill = colors ? colors[i] : (on ? 'var(--led)' : 'var(--led-dim)');
+    s += `<rect class="gb" style="--d:${i * 55}ms" x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${Math.min(3, bw / 4)}" fill="${fill}" ${stroke ? 'stroke="#58615b" stroke-width="1"' : ''}/>`;
+    if (showAt.includes(i)) s += `<text class="tx ${on ? 'hi' : 'w'} fade" style="--d:${500 + i * 55}ms" x="${x + bw / 2}" y="${y - 6}" text-anchor="middle" font-size="${n > 10 ? 11 : 13}">${fmtv(v)}</text>`;
+    s += `<text class="tx" x="${x + bw / 2}" y="${h - 4}" text-anchor="middle" font-size="${n > 10 ? 9.5 : 11}">${labels[i]}</text>`;
+  });
+  return s + '</svg>';
+}
+function hbars(rows, { w = 300, rowH = 26, labW = 112, fmtv = v => v, hi = [0] } = {}) {
+  const M = Math.max(...rows.map(r => r.v)), h = rows.length * rowH;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img">`;
+  rows.forEach((r, i) => {
+    const y = i * rowH, bw = (w - labW - 56) * r.v / M, on = hi.includes(i);
+    s += `<text class="tx ${on ? 'w' : ''}" x="${labW - 6}" y="${y + rowH / 2 + 4}" text-anchor="end" font-size="11.5">${esc(r.l)}</text>`;
+    s += `<rect class="gh" style="--d:${i * 80}ms" x="${labW}" y="${y + 5}" width="${bw}" height="${rowH - 10}" rx="3" fill="${on ? 'var(--led)' : 'var(--led-dim)'}"/>`;
+    s += `<text class="tx ${on ? 'hi' : 'w'} fade" style="--d:${600 + i * 80}ms" x="${labW + bw + 5}" y="${y + rowH / 2 + 4}" font-size="12">${fmtv(r.v)}</text>`;
+  });
+  return s + '</svg>';
+}
+
+/* ---------- the shorts ---------- */
+const odds11 = D.odds[0];
+const fav = D.fav, favLoss = fav.ret - fav.stake;
+const t1 = D.top3t[0], up = D.upsets[0];
+const niigata = D.frames.find(f => f.c === '新潟 芝1000m');
+const nRatio = niigata.f[7] / niigata.f[0];
+const jd = D.jday.find(d => d.date === '2016-11-06') || D.jday[0];
+const jdRides = D.jday_rides[`${jd.date}|${jd.jockey_name}`];
+const turf = D.going.filter(g => g.s === '芝');
+const rn11 = D.raceno.find(r => r.r === 11), rn1 = D.raceno.find(r => r.r === 1);
+const ORDER = ['逃げ', '先行', '差し', '追込'];
+const dirtStyle = ORDER.map(st => D.style.find(x => x.s === 'ダ' && x.st === st));
+const turfStyle = ORDER.map(st => D.style.find(x => x.s === '芝' && x.st === st));
+const [heavy, light] = D.bw_ext;
+const swan = D.no_win[0], ojuu = D.most_wins[0];
+const kikkaFav = D.kikka.filter(k => k.pop === 1).length;
+const bwMax = D.bw.reduce((m, b, i, a) => b.win > a[m].win ? i : m, 0);
+const l3 = D.l3f.find(x => x.s === '芝'), l3d = D.l3f.find(x => x.s === 'ダ');
+const age4 = D.age.find(a => a.a === 4), age7 = D.age.find(a => a.a === 7);
+const n3 = D.namelen.filter(x => x.l >= 3).map(x => x.win);
+
+function dotsRow(n, lit, perRow, y0, w = 300) {
+  const step = w / perRow, r = step * .36; let s = '';
+  for (let i = 0; i < n; i++) {
+    const cx = (i % perRow) * step + step / 2, cy = y0 + Math.floor(i / perRow) * step + step / 2;
+    s += `<circle class="fade" style="--d:${i * 22}ms" cx="${cx}" cy="${cy}" r="${r}" fill="${i < lit ? 'var(--led)' : 'var(--led-dim)'}"/>`;
+  }
+  return s;
+}
+function favLine() {
+  const S = fav.series, w = 300, h = 150, top = 14, bot = 22;
+  const vals = S.map(d => d[1]), mn = Math.min(0, ...vals), mx = Math.max(0, ...vals);
+  const X = i => i / (S.length - 1) * (w - 8), Y = v => top + (mx - v) / (mx - mn) * (h - top - bot);
+  const pts = S.map((d, i) => `${X(i).toFixed(1)},${Y(d[1]).toFixed(1)}`).join(' ');
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img"><line x1="0" x2="${w}" y1="${Y(0)}" y2="${Y(0)}" stroke="#4a524c" stroke-dasharray="3 3"/>`;
+  s += `<text class="tx" x="2" y="${Y(0) - 5}" font-size="10.5">±0円</text>`;
+  s += `<polyline class="ln" pathLength="1" points="${pts}" fill="none" stroke="var(--led)" stroke-width="2.4" stroke-linejoin="round"/>`;
+  const last = S.length - 1;
+  s += `<circle class="fade" style="--d:2400ms" cx="${X(last)}" cy="${Y(vals[last])}" r="4" fill="var(--led)" stroke="var(--tote)" stroke-width="2"/>`;
+  [0, S.findIndex(d => d[0].startsWith('2020')), S.findIndex(d => d[0].startsWith('2025'))].forEach(i => s += `<text class="tx" x="${X(i)}" y="${h - 4}" font-size="10.5" text-anchor="${i ? 'middle' : 'start'}">${S[i][0].slice(0, 4)}</text>`);
+  return s + '</svg>';
+}
+
+const CARDS = [
+  { tag: '単勝オッズ', h: `単勝<em>1.1倍</em>の大本命でも、5回に1回は負ける`,
+    big: big(Math.round((1 - odds11.win / 100) * 1000) / 10, { dec: 1, suf: '%' }),
+    sub: `単勝1.1倍で走った${D.odds11_n}頭のうち、${D.lost11_n}頭が勝てなかった。`,
+    viz: vbars(D.odds.map(o => o.win), D.odds.map(o => o.o.toFixed(1)), { hi: [0], valsAt: [0, D.odds.length - 1], fmtv: v => v.toFixed(0) + '%', max: 100 }),
+    note: '単勝オッズ別の勝率（1.1倍〜2.0倍）' },
+  { tag: '1番人気', h: `1番人気を<em>全レース</em>100円ずつ買い続けたら`,
+    big: big(favLoss, { suf: '円', s: true }),
+    sub: `${fmt(fav.n)}レースで${fmt(fav.stake)}円使って、戻りは${fmt(fav.ret)}円。回収率${(fav.ret / fav.stake * 100).toFixed(1)}%。`,
+    viz: favLine(), note: '収支の推移（2015年1月〜2026年10月）' },
+  { tag: '三連単', h: `100円が<em>5,836万円</em>になった三連単`,
+    big: big(t1.payout, { suf: '円', s: true }),
+    sub: `${ymd(t1.date)} ${t1.venue}${t1.race_no}R ${t1.name}。${fmt(t1.n * (t1.n - 1) * (t1.n - 2))}通り中${fmt(t1.pop)}番人気。`,
+    viz: `<div class="horses">${t1.horses.map((x, i) => `<div class="fade" style="--d:${300 + i * 350}ms"><i>${i + 1}着</i><span>${esc(x.name)}</span><small>${x.pop}番人気</small></div>`).join('')}</div>`,
+    note: '100円が58万倍。18番人気・17番人気・10番人気の順で入線' },
+  { tag: '大穴', h: `単勝<em>549.4倍</em>で勝った馬がいる`,
+    big: big(Math.round(up.odds * 100), { suf: '円' }),
+    sub: `100円が${fmt(Math.round(up.odds * 100))}円に。${ymd(up.date)} ${up.venue}${up.race_no}R、${up.n_runners}頭立て最低人気の「${up.horse_name}」。`,
+    viz: hbars(D.upsets.slice(0, 5).map(u => ({ l: u.horse_name, v: u.odds })), { fmtv: v => v.toFixed(1) + '倍' }),
+    note: '勝ち馬の単勝オッズ 上位5頭' },
+  { tag: '枠順', h: `新潟の直線1000mは<em>8枠が1枠の${nRatio.toFixed(1)}倍</em>勝つ`,
+    big: big(Math.round(nRatio * 10) / 10, { dec: 1, pre: '×' }),
+    sub: `外ラチ沿いを走れる外枠が圧倒的。8枠の勝率${niigata.f[7].toFixed(1)}%、1枠は${niigata.f[0].toFixed(1)}%。`,
+    viz: vbars(niigata.f, ['1', '2', '3', '4', '5', '6', '7', '8'].map(x => x + '枠'), { hi: [], valsAt: [0, 7], colors: FRAME, stroke: true, fmtv: v => v.toFixed(1) + '%' }),
+    note: `新潟 芝1000m・14頭以上の${niigata.races}レース・枠ごとの1頭あたり勝率` },
+  { tag: '騎手', h: `1日で<em>8勝</em>した騎手がいる`,
+    big: big(jd.n, { suf: '勝' }),
+    sub: `${jn(jd.jockey_name)}、${ymd(jd.date)} ${jd.venue}。${jdRides}鞍に乗って${jd.n}勝、勝率${Math.round(jd.n / jdRides * 100)}%。`,
+    viz: `<svg viewBox="0 0 300 70" role="img">${dotsRow(jdRides, jd.n, 10, 6)}<text class="tx" x="0" y="66" font-size="11">● 1鞍＝1つ。光っているのが勝ったレース</text></svg>`,
+    note: `1日7勝以上はこの11年で${D.jday.filter(d => d.n >= 7).length}回、すべてルメール` },
+  { tag: '馬場状態', h: `芝の<em>不良馬場</em>は荒れる`,
+    big: big(turf[3].big, { dec: 1, suf: '%' }),
+    sub: `10万円以上の三連単が出た割合。良馬場は${turf[0].big}%。1番人気の勝率も${turf[0].fav}%→${turf[3].fav}%に下がる。`,
+    viz: vbars(turf.map(g => g.big), turf.map(g => g.g), { hi: [3], valsAt: [0, 1, 2, 3], fmtv: v => v.toFixed(1) + '%', max: 40 }),
+    note: '芝のレース・馬場状態別 三連単10万円以上の割合' },
+  { tag: 'レース番号', h: `1日でいちばん荒れるのは<em>11R</em>`,
+    big: big(rn11.big, { dec: 1, suf: '%' }),
+    sub: `三連単が10万円を超えた割合。1Rは${rn1.big}%。11Rはその日のメインレースで、多頭数の実力拮抗戦が多い。`,
+    viz: vbars(D.raceno.map(r => r.big), D.raceno.map(r => r.r), { hi: [10], valsAt: [0, 10], fmtv: v => v.toFixed(0) + '%' }),
+    note: 'レース番号別 三連単10万円以上の割合' },
+  { tag: '脚質', h: `ダートで<em>逃げた馬</em>は5頭に1頭が勝つ`,
+    big: big(dirtStyle[0].win, { dec: 1, suf: '%' }),
+    sub: `後ろから行く「追込」は${dirtStyle[3].win.toFixed(1)}%。差は8倍。芝でも逃げは${turfStyle[0].win.toFixed(1)}%。`,
+    viz: vbars(dirtStyle.map(x => x.win), ORDER, { hi: [0], valsAt: [0, 1, 2, 3], fmtv: v => v.toFixed(1) + '%' }),
+    note: 'ダート・最初のコーナーの位置で分けた勝率' },
+  { tag: '馬体重', h: `<em>600kg</em>の馬も<em>338kg</em>の馬も勝っている`,
+    big: big(heavy.body_weight - light.body_weight, { suf: 'kg差' }),
+    sub: `最重量の勝ち馬は${heavy.horse_name}（${heavy.body_weight}kg）、最軽量は${light.horse_name}（${light.body_weight}kg）。全体では重い馬ほどよく勝つ。`,
+    viz: vbars(D.bw.map(b => b.win), D.bw.map(b => b.b.startsWith('〜') || b.b.endsWith('〜') ? b.b : b.b.split('〜')[0]), { hi: [bwMax], valsAt: [0, bwMax], fmtv: v => v.toFixed(1) + '%' }),
+    note: '馬体重別の勝率（kg、障害を除く）' },
+  { tag: '記録', h: `<em>74戦</em>して一度も勝てなかった馬`,
+    big: big(swan.n, { suf: '戦0勝' }),
+    sub: `${swan.horse_name}は3着以内も0回。対して${ojuu.horse_name}は${ojuu.n}戦${ojuu.wins}勝。`,
+    viz: `<svg viewBox="0 0 300 152" role="img"><text class="tx w" x="0" y="11" font-size="11.5">${esc(swan.horse_name)}</text>${dotsRow(swan.n, 0, 25, 16)}<text class="tx w" x="0" y="91" font-size="11.5">${esc(ojuu.horse_name)}</text>${dotsRow(ojuu.n, ojuu.wins, 25, 96)}</svg>`,
+    note: '● 1レース＝1つ。光っているのが勝利（2015年以降のJRA）' },
+  { tag: '馬名', h: `馬名の文字数で勝率は<em>変わる？</em>`,
+    big: `<div class="big s">ほぼ同じ</div>`,
+    sub: `3〜9文字はどれも${Math.min(...n3).toFixed(1)}〜${Math.max(...n3).toFixed(1)}%。2文字だけ${D.namelen[0].win}%と低いが、対象は${fmt(D.namelen[0].n)}走と少なめ。`,
+    viz: vbars(D.namelen.map(x => x.win), D.namelen.map(x => x.l + '字'), { hi: [], valsAt: D.namelen.map((_, i) => i), fmtv: v => v.toFixed(1), max: 10 }),
+    note: '馬名の文字数別の勝率（%）' },
+  { tag: '上がり3F', h: `ゴール前の600mが<em>いちばん速かった馬</em>は？`,
+    big: big(l3.win, { dec: 1, suf: '%' }),
+    sub: `芝で上がり3ハロン最速だった馬の勝率。3着以内なら${l3.top3}%。ダートでは勝率${l3d.win}%。`,
+    viz: vbars([D.hero.races / D.hero.runs * 100, l3.win, l3.top3], ['全体の勝率', '最速馬の勝率', '最速馬の3着内率'], { hi: [1, 2], valsAt: [0, 1, 2], fmtv: v => v.toFixed(1) + '%', max: 80 }),
+    note: '芝・上がり3F最速が1頭だけのレース' },
+  { tag: '三連単', h: `<em>100万円</em>を超えた三連単は何回？`,
+    big: big(D.t3_over1m, { suf: '回' }),
+    sub: `${fmt(D.t3count)}レースのうち${(D.t3_over1m / D.t3count * 100).toFixed(1)}%。1年に約80回のペースで出ている。三連単の払戻の中央値は${fmt(D.t3_median)}円。`,
+    viz: hbars(D.top3t.slice(0, 5).map(t => ({ l: `${t.date.slice(0, 4)} ${t.venue}${t.race_no}R`, v: t.payout / 10000 })), { fmtv: v => fmt(Math.round(v)) + '万' }),
+    note: '三連単の払戻 上位5レース（万円）' },
+  { tag: '年齢', h: `競走馬のピークは<em>4歳</em>`,
+    big: big(age4.win, { dec: 1, suf: '%' }),
+    sub: `4歳の勝率がいちばん高く、5歳から下がり始めて7歳では${age7.win}%。`,
+    viz: vbars(D.age.map(a => a.win), D.age.map(a => a.a + '歳'), { hi: [2], valsAt: [0, 2, D.age.length - 1], fmtv: v => v.toFixed(1) + '%' }),
+    note: '年齢別の勝率（障害を除く）' },
+  { tag: '菊花賞', h: `菊花賞の1番人気は<em>11年で${kikkaFav}勝</em>`,
+    big: big(kikkaFav, { suf: ` / ${D.kikka.length}` }),
+    sub: `勝ち馬の人気は最低で7番人気（フィエールマン）。2017年の不良馬場では三連単${fmt(D.kikka.find(k => k.year === 2017).t3)}円。`,
+    viz: vbars(D.kikka.map(k => k.pop), D.kikka.map(k => "'" + String(k.year).slice(2)), { hi: D.kikka.map((k, i) => k.pop === 1 ? i : -1).filter(i => i >= 0), valsAt: D.kikka.map((_, i) => i), fmtv: v => v + '', max: 8 }),
+    note: '年ごとの勝ち馬の人気（棒が低いほど人気馬）' },
+];
+
+function cardHTML(c) {
+  return `<div class="ci"><span class="tag">${c.tag}</span><span class="brand">競馬データ図鑑</span><h3>${c.h}</h3>${c.big}<div class="sub">${c.sub}</div><div class="viz">${c.viz}</div><div class="note">${c.note} ／ JRA 2015–2026</div></div>`;
+}
+function play(card) {
+  card.classList.add('reset'); void card.offsetWidth;
+  requestAnimationFrame(() => { card.classList.remove('reset'); card.querySelectorAll('.big[data-to]').forEach(countUp); });
+}
+function openStage(card, onOpen) {
+  const st = document.createElement('div'); st.className = 'stage';
+  const x = document.createElement('button'); x.className = 'x'; x.textContent = '閉じる ✕';
+  const clone = card.cloneNode(true); st.append(clone, x); document.body.append(st);
+  const close = () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); st.remove(); document.removeEventListener('keydown', onKey); if (st._stop) st._stop(); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  x.onclick = close; document.addEventListener('keydown', onKey);
+  document.addEventListener('fullscreenchange', function f() { if (!document.fullscreenElement) { document.removeEventListener('fullscreenchange', f); if (st.isConnected) close(); } });
+  try { const p = st.requestFullscreen && st.requestFullscreen(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  x.focus();
+  setTimeout(() => onOpen ? onOpen(clone, st) : play(clone), 350);
+}
+const cardsEl = $('#cards');
+CARDS.forEach(c => {
+  const cell = document.createElement('div'); cell.className = 'cell';
+  const card = document.createElement('article'); card.className = 'card'; card.innerHTML = cardHTML(c);
+  card.setAttribute('aria-label', c.h.replace(/<[^>]+>/g, ''));
+  const ctl = document.createElement('div'); ctl.className = 'ctrl';
+  const b1 = document.createElement('button'); b1.textContent = '▶ 再生'; b1.onclick = () => play(card);
+  const b2 = document.createElement('button'); b2.textContent = '縦型で再生'; b2.onclick = () => openStage(card);
+  ctl.append(b1, b2); cell.append(card, ctl); cardsEl.append(cell);
+});
+
+/* ---------- bar chart race ---------- */
+const RACE = { j: D.race_jockey, s: D.race_sire };
+let rk = 'j', ri = 0, timer = null;
+const raceCell = $('#raceCell');
+raceCell.innerHTML = `<article class="card" id="raceCard"><div class="ci"><span class="tag" id="raceTag">騎手</span><span class="brand">競馬データ図鑑</span><h3 id="raceH"></h3><div class="bcr-when" id="raceWhen"></div><div class="bcr" id="bcr"></div><div class="note" id="raceFoot"></div></div></article>
+<div class="ctrl"><button class="primary" id="racePlay">▶ 再生</button><button id="raceStage">縦型で再生</button></div>`;
+const slider = $('#raceSlider');
+function buildRace(root) {
+  const R = RACE[rk], bcr = root.querySelector('.bcr');
+  bcr.innerHTML = R.names.map((n, i) => `<div class="row" data-i="${i}"><div class="lab">${esc(rk === 'j' ? jn(n) : n)}</div><div class="bw"><div class="b"></div><span class="v num">0</span></div></div>`).join('');
+  root.querySelector('#raceTag, .tag').textContent = rk === 'j' ? '騎手' : '種牡馬';
+  root.querySelector('h3').innerHTML = rk === 'j' ? '通算<em>勝利数</em>が多い騎手' : '産駒の<em>勝利数</em>が多い種牡馬';
+  root.querySelector('.note').textContent = (rk === 'j' ? 'JRA平地・障害の1着回数' : '父馬ごとの産駒の1着回数') + ' 上位10 ／ JRA 2015–2026';
+}
+function drawRace(root, i) {
+  const R = RACE[rk], vals = R.values.map(v => v[i]);
+  const order = vals.map((v, k) => [v, k]).sort((a, b) => b[0] - a[0]);
+  const M = Math.max(1, order[0][0]), rows = root.querySelectorAll('.bcr .row');
+  const bcr = root.querySelector('.bcr'), rowH = Math.min(bcr.clientHeight / 10.4, bcr.clientWidth * 0.11) || 26;
+  bcr.style.setProperty('--rh', rowH + 'px');
+  const rank = {}; order.forEach(([, k], r) => rank[k] = r);
+  rows.forEach(row => {
+    const k = +row.dataset.i, r = rank[k], v = vals[k];
+    row.style.transform = `translateY(${Math.min(r, 11) * rowH}px)`;
+    row.style.opacity = r < 10 ? 1 : 0;
+    row.classList.toggle('lead', r === 0);
+    const pct = v / M * 100;
+    row.querySelector('.b').style.width = pct + '%';
+    const vEl = row.querySelector('.v'); vEl.textContent = fmt(v); vEl.style.left = pct + '%';
+  });
+  const m = R.months[i]; root.querySelector('.bcr-when').textContent = `${m.slice(0, 4)}.${m.slice(5)}`;
+}
+function setRaceKind(k) {
+  rk = k; stopRace(); $('#rjBtn').setAttribute('aria-pressed', k === 'j'); $('#rsBtn').setAttribute('aria-pressed', k === 's');
+  slider.max = RACE[k].months.length - 1; ri = +slider.max; slider.value = ri;
+  buildRace($('#raceCard')); drawRace($('#raceCard'), ri); raceNote();
+}
+function raceNote() {
+  const R = RACE[rk], last = R.months.length - 1, vals = R.values.map(v => v[last]);
+  const top = vals.map((v, k) => [v, R.names[k]]).sort((a, b) => b[0] - a[0]).slice(0, 3);
+  $('#raceNote').innerHTML = `${R.months[last].replace('-', '年')}月時点の1位は<b>${esc(rk === 'j' ? jn(top[0][1]) : top[0][1])}</b>（${fmt(top[0][0])}勝）。2位 ${esc(rk === 'j' ? jn(top[1][1]) : top[1][1])}（${fmt(top[1][0])}勝）、3位 ${esc(rk === 'j' ? jn(top[2][1]) : top[2][1])}（${fmt(top[2][0])}勝）。`;
+}
+function runRace(root, onTick, onEnd) {
+  let i = 0; const n = RACE[rk].months.length;
+  drawRace(root, 0);
+  const id = setInterval(() => { i++; if (i >= n) { clearInterval(id); onEnd && onEnd(); return; } drawRace(root, i); onTick && onTick(i); }, reduce ? 60 : 170);
+  return () => clearInterval(id);
+}
+function stopRace() { if (timer) { timer(); timer = null; } $('#racePlay').textContent = '▶ 再生'; }
+$('#racePlay').onclick = () => {
+  if (timer) return stopRace();
+  $('#racePlay').textContent = '■ 停止';
+  timer = runRace($('#raceCard'), i => { ri = i; slider.value = i; }, () => { timer = null; $('#racePlay').textContent = '▶ 再生'; });
+};
+slider.oninput = () => { stopRace(); ri = +slider.value; drawRace($('#raceCard'), ri); };
+$('#rjBtn').onclick = () => setRaceKind('j');
+$('#rsBtn').onclick = () => setRaceKind('s');
+$('#raceStage').onclick = () => { stopRace(); openStage($('#raceCard'), (clone, st) => { clone.removeAttribute('id'); setTimeout(() => { st._stop = runRace(clone); }, 50); }); };
+setRaceKind('j');
+addEventListener('resize', () => drawRace($('#raceCard'), +slider.value));
+
+/* ---------- explorer charts (theme-aware) ---------- */
+function bars(el, rows, { h = 240, fmtv = v => v, tip = r => '', colors = null, hi = [], ref = null, unit = '' } = {}) {
+  const w = 560, L = 40, B = 26, T = 18, ph = h - B - T, n = rows.length;
+  const M = Math.max(ref || 0, ...rows.map(r => r.v)) * 1.08;
+  const step = niceStep(M), gap = Math.max(4, 120 / n), bw = (w - L - gap * (n - 1)) / n;
+  let s = `<svg viewBox="0 0 ${w} ${h}" role="img"><g class="grid">`;
+  for (let g = 0; g <= M; g += step) { const y = T + ph - g / M * ph; s += `<line x1="${L}" x2="${w}" y1="${y}" y2="${y}"/><text class="ax" x="${L - 6}" y="${y + 4}" text-anchor="end">${+g.toFixed(2)}${unit}</text>`; }
+  s += '</g>';
+  rows.forEach((r, i) => {
+    const x = L + i * (bw + gap), bh = Math.max(1.5, r.v / M * ph), y = T + ph - bh;
+    const fill = colors ? `style="fill:${colors[i]}" stroke="var(--muted)" stroke-width="1"` : '';
+    s += `<rect class="bp ${hi.includes(i) ? 'hi' : ''}" ${fill} x="${x}" y="${y}" width="${bw}" height="${bh}" rx="${Math.min(4, bw / 4)}"/>`;
+    s += `<rect class="hit" data-tip="${esc(tip(r))}" x="${x - gap / 2}" y="${T}" width="${bw + gap}" height="${ph}"/>`;
+    if (n <= 12) s += `<text class="axv" x="${x + bw / 2}" y="${y - 5}" text-anchor="middle">${fmtv(r.v)}</text>`;
+    s += `<text class="ax" x="${x + bw / 2}" y="${h - 8}" text-anchor="middle">${esc(r.l)}</text>`;
+  });
+  if (ref) { const y = T + ph - ref / M * ph; s += `<line class="ref" x1="${L}" x2="${w}" y1="${y}" y2="${y}"/><text class="axv" x="${w}" y="${y - 5}" text-anchor="end">${ref}${unit}</text>`; }
+  el.innerHTML = s + '</svg>';
+}
+function niceStep(M) { const raw = M / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+
+// 枠番
+const sel = $('#courseSel');
+const VORD = ['札幌', '函館', '福島', '新潟', '東京', '中山', '中京', '京都', '阪神', '小倉'];
+[...D.frames].sort((a, b) => VORD.indexOf(a.c.split(' ')[0]) - VORD.indexOf(b.c.split(' ')[0]) || a.c.localeCompare(b.c, 'ja', { numeric: true }))
+  .forEach(f => sel.add(new Option(`${f.c}（${f.races}R）`, f.c)));
+sel.value = '新潟 芝1000m';
+function drawFrames() {
+  const f = D.frames.find(x => x.c === sel.value);
+  bars($('#frameChart'), f.f.map((v, i) => ({ l: (i + 1) + '枠', v })), { colors: FRAME, fmtv: v => v.toFixed(1), unit: '%', tip: r => `${f.c} ${r.l}：勝率${r.v.toFixed(2)}%（${f.races}レース）` });
+  const r = f.ratio;
+  $('#frameLead').innerHTML = r >= 1 ? `内枠（1・2枠）は外枠（7・8枠）の<b>${r.toFixed(2)}倍</b>勝っています。` : `外枠（7・8枠）は内枠（1・2枠）の<b>${(1 / r).toFixed(2)}倍</b>勝っています。`;
+}
+sel.onchange = drawFrames; drawFrames();
+
+// 人気
+let pk = 'win';
+function drawPop() {
+  const lab = { win: '勝率', top3: '3着内率', roi: '単勝回収率' }[pk];
+  bars($('#popChart'), D.pop.map(p => ({ l: p.p, v: p[pk], n: p.n })), { unit: '%', ref: pk === 'roi' ? 100 : null, hi: pk === 'roi' ? [] : [0], fmtv: v => v.toFixed(0),
+    tip: r => `${r.l}番人気：${lab} ${r.v.toFixed(1)}%（${fmt(r.n)}頭）` });
+  const p1 = D.pop[0];
+  $('#popLead').innerHTML = pk === 'win' ? `1番人気の勝率は<b>${p1.win.toFixed(1)}%</b>。3回に2回は負けています。` :
+    pk === 'top3' ? `1番人気でも3着以内は<b>${p1.top3.toFixed(1)}%</b>。` :
+    `どの人気を買い続けても100%に届きません。<b>人気薄ほど回収率が下がる</b>のが競馬の特徴です。`;
+  ['pWin', 'pTop3', 'pRoi'].forEach((id, i) => $('#' + id).setAttribute('aria-pressed', ['win', 'top3', 'roi'][i] === pk));
+}
+$('#pWin').onclick = () => { pk = 'win'; drawPop(); }; $('#pTop3').onclick = () => { pk = 'top3'; drawPop(); }; $('#pRoi').onclick = () => { pk = 'roi'; drawPop(); };
+drawPop();
+
+// 馬場
+const gmax = Math.max(...D.going.map(g => g.big));
+$('#goingTbl').innerHTML = `<thead><tr><th>コース</th><th>馬場</th><th class="r">レース数</th><th class="r">1番人気の勝率</th><th>三連単10万円以上の割合</th><th class="r">三連単の中央値</th></tr></thead><tbody>` +
+  D.going.map(g => `<tr><td>${g.s === '芝' ? '芝' : 'ダート'}</td><td>${g.g}</td><td class="r">${fmt(g.n)}</td><td class="r">${g.fav.toFixed(1)}%</td><td><span class="inbar" style="width:${g.big / gmax * 90}px"></span>${g.big.toFixed(1)}%</td><td class="r">${fmt(g.med)}円</td></tr>`).join('') + '</tbody>';
+
+// 逃げ
+const nmax = Math.max(...D.nige_venue.map(x => x.win));
+$('#nigeTbl').innerHTML = `<thead><tr><th>競馬場</th><th>芝の逃げ馬</th><th>ダートの逃げ馬</th></tr></thead><tbody>` +
+  VORD.map(v => { const t = D.nige_venue.find(x => x.v === v && x.s === '芝'), d = D.nige_venue.find(x => x.v === v && x.s === 'ダ');
+    const cell = x => x ? `<span class="inbar" style="width:${x.win / nmax * 80}px"></span>${x.win.toFixed(1)}% <span style="color:var(--muted);font-size:12px">（${fmt(x.n)}頭）</span>` : '—';
+    return `<tr><td>${v}</td><td>${cell(t)}</td><td>${cell(d)}</td></tr>`; }).join('') + '</tbody>';
+
+// 年齢・体重増減
+bars($('#ageChart'), D.age.map(a => ({ l: a.a + '歳', v: a.win, n: a.n })), { h: 200, unit: '%', hi: [2], fmtv: v => v.toFixed(1), tip: r => `${r.l}：勝率${r.v.toFixed(2)}%（${fmt(r.n)}走）` });
+bars($('#bwdChart'), D.bwd.map(a => ({ l: a.b, v: a.win, n: a.n })), { h: 200, unit: '%', hi: [3], fmtv: v => v.toFixed(1), tip: r => `${r.l}kg：勝率${r.v.toFixed(2)}%（${fmt(r.n)}走）` });
+
+// 菊花賞
+$('#kikkaTbl').innerHTML = `<thead><tr><th>年</th><th>馬場</th><th>勝ち馬</th><th class="r">人気</th><th class="r">単勝</th><th>騎手</th><th>枠</th><th>通過順</th><th class="r">上がり3F</th><th class="r">タイム</th><th>2着・3着</th><th class="r">三連単</th></tr></thead><tbody>` +
+  D.kikka.map(k => { const t = k.time, mm = Math.floor(t / 60), ss = (t - mm * 60).toFixed(1).padStart(4, '0');
+    return `<tr><td>${k.year}</td><td>${k.going}</td><td><b>${esc(k.winner)}</b></td><td class="r"><span class="chip ${k.pop === 1 ? 'fav' : ''}">${k.pop}</span></td><td class="r">${k.odds.toFixed(1)}倍</td><td>${esc(jn(k.jockey))}</td>
+    <td><span class="inbar" style="width:10px;height:10px;border-radius:2px;background:${FRAME[k.frame - 1]};outline:1px solid var(--muted)"></span>${k.frame}</td><td>${k.pass_}</td><td class="r">${k.last3f.toFixed(1)}</td><td class="r">${mm}:${ss}</td>
+    <td>${k.top3.slice(1).map(x => `${esc(x.name)}（${x.pop}）`).join('、')}</td><td class="r">${fmt(k.t3)}円</td></tr>`; }).join('') + '</tbody>';
+
+/* ---------- tooltip ---------- */
+const tipEl = $('#tip');
+document.addEventListener('pointermove', e => {
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (!t) { tipEl.classList.remove('on'); return; }
+  tipEl.textContent = t.dataset.tip; tipEl.classList.add('on');
+  const x = Math.min(e.clientX + 14, innerWidth - tipEl.offsetWidth - 8);
+  tipEl.style.left = x + 'px'; tipEl.style.top = (e.clientY + 16) + 'px';
+});
+
+/* 最初の表示：上の数字だけ一度カウントアップ */
+document.querySelectorAll('#board .cu').forEach(countUp);
+</script>
