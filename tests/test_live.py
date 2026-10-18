@@ -22,6 +22,16 @@ class EntriesTest(unittest.TestCase):
         self.assertEqual([h["number"] for h in r["horses"]], list(range(1, 14)))
 
 
+class ResultPageTest(unittest.TestCase):
+    def test_result_page(self):
+        html = gzip.decompress((FIX / "result_202605040711.html.gz").read_bytes()).decode("utf-8", "replace")
+        d = parse.result_page(html, "202605040711")
+        self.assertEqual(len(d["results"]), 13)
+        self.assertEqual((d["results"][0]["number"], d["results"][0]["finish"], d["results"][0]["odds"]), (9, 1, 4.6))
+        self.assertIn({"race_id": "202605040711", "bet_type": "単勝", "combo": "9", "payout": 460}, d["payouts"])
+        self.assertEqual(sum(p["bet_type"] == "複勝" for p in d["payouts"]), 3)
+
+
 class SettleTest(unittest.TestCase):
     def test_win_place_and_scratch(self):
         with tempfile.TemporaryDirectory() as tmp:

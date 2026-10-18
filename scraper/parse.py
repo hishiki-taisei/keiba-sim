@@ -272,3 +272,37 @@ def entries(html: str, race_id: str) -> dict | None:
             "going": going.group(1) if going else None, "post_time": post.group(1) if post else None,
             "class_text": m_cls.group(0) if m_cls else cls, "grade": _grade(title),
             "horses": out}
+
+
+def result_page(html: str, race_id: str) -> dict | None:
+    """race.netkeiba.com/race/result.html -> finishing order, win odds and win/place payouts.
+
+    Up the same evening, while the db.netkeiba.com race page can lag by days; used to settle bets.
+    """
+    b = soup(html)
+    table = b.select_one("table#All_Result_Table") or b.select_one("table.RaceTable01")
+    if table is None:
+        return None
+    results = []
+    for r in table.select("tr.HorseList"):
+        txt = [c.get_text(" ", strip=True) for c in r.find_all("td")]
+        if len(txt) < 11:
+            continue
+        num = _num(txt[2], int)
+        if num is None:
+            continue
+        fr = txt[0][:1] if txt[0][:1] in ("取", "除", "中", "失") else txt[0]  # 取消 -> 取, as in the DB
+        results.append({"race_id": race_id, "number": num, "finish_raw": fr, "finish": _num(txt[0], int),
+                        "odds": _num(txt[10])})
+    payouts = []
+    for tr in b.select("table.Payout_Detail_Table tr"):
+        th = tr.find("th")
+        kind = th.get_text(strip=True) if th else ""
+        if kind not in ("単勝", "複勝"):
+            continue
+        res, pay = tr.select_one("td.Result"), tr.select_one("td.Payout")
+        nums = [s.get_text(strip=True) for s in res.find_all("span") if s.get_text(strip=True)] if res else []
+        yen = re.findall(r"([\d,]+)円", pay.get_text(" ")) if pay else []
+        for n, y in zip(nums, yen):
+            payouts.append({"race_id": race_id, "bet_type": kind, "combo": n, "payout": int(y.replace(",", ""))})
+    return {"results": results, "payouts": payouts} if results else None

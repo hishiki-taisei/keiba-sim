@@ -51,6 +51,7 @@ SHARED_DB = SHARED / "data" / "keiba.sqlite"
 LOCAL_DB = ROOT / "data" / "keiba.sqlite"
 OUT = SHARED / "betting"
 BETS = OUT / "bets.csv"
+WEB_RESULTS = OUT / "results_web.csv"  # results read from race.netkeiba.com before the DB has them
 MODELS = OUT / "models"
 
 # Same items as the offset_pace2 experiment: the market's odds are the starting point and the
@@ -354,19 +355,55 @@ def bet(day: dt.date):
     return new
 
 
+def results_for(ids: list[str], fetch: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Results and win/place payouts for these races: from the DB, else from race.netkeiba.com's
+    result page (up the same evening; db.netkeiba.com can lag by days). Web results are kept
+    in WEB_RESULTS so reports can use them too."""
+    con = sqlite3.connect(LOCAL_DB)
+    q = ",".join("?" * len(ids))
+    res = pd.read_sql(f"SELECT race_id, number, finish, finish_raw, odds FROM results WHERE race_id IN ({q})", con, params=ids)
+    pay = pd.read_sql(f"SELECT race_id, bet_type, combo, payout FROM payouts WHERE race_id IN ({q}) "
+                      "AND bet_type IN ('単勝','複勝')", con, params=ids)
+    con.close()
+    web = pd.read_csv(WEB_RESULTS, dtype={"race_id": str, "combo": str}) if WEB_RESULTS.exists() else pd.DataFrame(
+        columns=["kind", "race_id", "number", "finish", "finish_raw", "odds", "bet_type", "combo", "payout"])
+    todo = [i for i in ids if i not in set(res["race_id"]) and i not in set(web["race_id"])]
+    if fetch and todo:
+        f = Fetcher(ROOT / "data" / "raw", interval=1.2)
+        new = []
+        for rid in todo:
+            html = f.get(f"https://race.netkeiba.com/race/result.html?race_id={rid}", f"live/result/{rid}",
+                         encoding="utf-8", refresh=True)
+            d = parse.result_page(html or "", rid)
+            if d and d["payouts"]:
+                new += [dict(r, kind="result") for r in d["results"]] + [dict(p, kind="payout") for p in d["payouts"]]
+        if new:
+            web = pd.concat([web, pd.DataFrame(new)], ignore_index=True)
+            web.to_csv(WEB_RESULTS, index=False)
+        print(f"read {len({r['race_id'] for r in new})} results from race.netkeiba.com", flush=True)
+    web = web[web["race_id"].isin(ids) & ~web["race_id"].isin(set(res["race_id"]))]
+    w_res = web[web["kind"] == "result"][res.columns]
+    w_pay = web[web["kind"] == "payout"][pay.columns]
+    res = pd.concat([res, w_res.astype({"number": int})], ignore_index=True)
+    pay = pd.concat([pay, w_pay], ignore_index=True)
+    for c in ("finish", "odds"):
+        res[c] = pd.to_numeric(res[c], errors="coerce")
+    pay["payout"] = pd.to_numeric(pay["payout"], errors="coerce").fillna(0)
+    return res, pay
+
+
 def settle():
-    """Settle every open bet whose race result is in the database."""
+    """Settle every open bet whose race result is known."""
     b = read_bets()
     open_ = b[~b["settled"]]
     if open_.empty:
         print("no open bets")
         return b
-    con = sqlite3.connect(LOCAL_DB)
     ids = sorted(open_["race_id"].unique())
+    res, pay = results_for(ids)
+    pay["combo"] = pay["combo"].astype(str)
+    con = sqlite3.connect(LOCAL_DB)
     q = ",".join("?" * len(ids))
-    res = pd.read_sql(f"SELECT race_id, number, finish, finish_raw, odds FROM results WHERE race_id IN ({q})", con, params=ids)
-    pay = pd.read_sql(f"SELECT race_id, bet_type, combo, payout FROM payouts WHERE race_id IN ({q}) "
-                      "AND bet_type IN ('単勝','複勝')", con, params=ids)
     missing = {r for r, s in con.execute(f"SELECT race_id, status FROM race_queue WHERE race_id IN ({q})", ids)
                if s == "missing"}
     con.close()
@@ -430,16 +467,14 @@ def model_feedback(settled_dates: list[str]) -> list[str]:
     if not frames:
         return []
     p = pd.concat(frames)
-    con = sqlite3.connect(LOCAL_DB)
-    ids = sorted(p["race_id"].unique())
-    res = pd.read_sql(f"SELECT race_id, number, finish, odds AS final_odds FROM results WHERE race_id IN ({','.join('?' * len(ids))})",
-                      con, params=ids)
-    con.close()
+    res = results_for(sorted(p["race_id"].unique()), fetch=False)[0]
+    res = res[["race_id", "number", "finish", "odds"]].rename(columns={"odds": "final_odds"})
     p = p.merge(res, on=["race_id", "number"], how="inner")
     p = p[p.groupby("race_id")["finish"].transform(lambda s: (s == 1).any())]
     m = p[p["model"] != "market"]
     if m.empty:
         return []
+    m = m.astype({c: float for c in ("p_model", "p_market", "odds_at_bet", "final_odds") if c in m})
     m = m.assign(p_final=evaluate.market_probs(m.rename(columns={"odds": "_o", "final_odds": "odds"})))
     w = m[m["finish"] == 1]
     ll = lambda col: -np.log(np.clip(w[col], 1e-6, 1))
