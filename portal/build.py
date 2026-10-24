@@ -747,6 +747,12 @@ def main():
             if h["name"] in wet.index:
                 w = wet.loc[h["name"]]
                 h["wet"] = {"grade": str(w["重以上の補正案"]), "why": str(w["根拠"])}
+    preds_csv = ROOT.parent / "data" / "preds" / f"{KIKKA['race_id']}.csv"
+    if preds_csv.exists():  # the no-odds model too, as a second opinion next to the odds-corrected one
+        ab = pd.read_csv(preds_csv).dropna(subset=["number"]).set_index("horse_name")["p_ability"]
+        ab = ab / ab.sum()
+        for h in kikka["horses"]:
+            h["p_ability"] = num(ab.get(h["name"]), 4)
     kikka["theater"] = copy_theater(args.featured)
     kikka["model"] = field.get("model")
     (OUT / "race" / f"{KIKKA['race_id']}.json").write_text(dump(kikka))

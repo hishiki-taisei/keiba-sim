@@ -341,6 +341,7 @@ function aiView(r) {
   const hs = r.horses.filter((h) => h.p_ai != null).sort((a, b) => b.p_ai - a.p_ai);
   const max = Math.max(...hs.map((h) => Math.max(h.p_ai, h.p_market ?? 0)), 0.01);
   const hasNum = hs.some((h) => h.number), hasOdds = hs.some((h) => h.odds);
+  const hasAb = hs.some((h) => h.p_ability != null);
   const ev = (h) => (h.odds ? h.p_ai * h.odds : null);
   const rows = hs.map((h, i) => {
     const e = ev(h);
@@ -351,14 +352,18 @@ function aiView(r) {
     ${hasOdds ? `<td class="r nw">${h.odds ?? "–"}<div class="hs">${h.pop ?? "-"}番人気</div></td>` : ""}
     <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div>
       ${h.p_market != null ? `<div class="pbar mk"><span class="tr wide"><i style="width:${(h.p_market / max) * 100}%"></i></span><span class="hs">人気 ${pct(h.p_market)}</span></div>` : ""}</td>
-    ${hasOdds ? `<td class="r nw ${e >= 1 ? "sp" : ""}">${e != null ? e.toFixed(2) : "–"}</td>` : ""}
+    ${hasAb ? `<td class="r pc">${pct(h.p_ability)}</td>` : ""}
+    ${hasOdds ? `<td class="r nw ${e >= 1.1 ? "sp" : ""}">${e != null ? e.toFixed(2) : "–"}</td>` : ""}
     <td class="r">${pct(h.p_place ?? h.p_sim_place, 0)}</td>
     <td class="c pc nw"><span class="sp">${pm ? "＋" + pm : ""}</span> <span class="sm">${mm ? "－" + mm : ""}</span></td></tr>`;
   }).join("");
-  const value = hasOdds ? hs.filter((h) => ev(h) >= 1.2 && h.p_ai >= 0.05) : [];
-  return `${hasOdds ? `<p style="margin:0">${value.length ? `AI勝率が5%以上で、AI勝率×単勝オッズが1.2を超えるのは ${value.map((h) => `<b>${h.number ?? ""} ${esc(h.name)}</b>（${ev(h).toFixed(2)}）`).join("、")} です。` : "AI勝率が5%以上で、AI勝率×単勝オッズが1.2を超える馬はいません。"}${r.odds_time ? `<span class="small sub">　オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}</p>` : ""}
-    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">今のAIは人気薄の馬を高めに見る傾向があり（テストでは本命の的中率も1番人気より低い）、期待値が1を超える馬が多めに出ます。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。AI勝率がこれより高い馬は、AIが人気より高く見ている馬です。3着内率は、AI勝率どおりに勝つよう合わせた${term("展開")}のレースを何千回も走らせた結果です${r.theater ? `（<button type="button" class="linkbtn" data-tab="race">展開タブ</button>で同じレースを見られます）` : ""}。データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
+  const value = hasOdds ? hs.filter((h) => ev(h) >= 1.1 && h.p_ai >= 0.03) : [];
+  const gap = hasAb && hasOdds ? hs.filter((h) => h.p_market >= 0.03 || h.p_ability >= 0.05).sort((a, b) => Math.abs(b.p_ability - b.p_market) - Math.abs(a.p_ability - a.p_market)).slice(0, 2) : [];
+  return `${hasOdds ? `<p style="margin:0">${value.length ? `AI勝率×単勝オッズが1.1を超えるのは ${value.map((h) => `<b>${h.number ?? ""} ${esc(h.name)}</b>（${ev(h).toFixed(2)}）`).join("、")} です。` : "AI勝率×単勝オッズが1.1を超える馬はいません。"}
+    ${gap.length ? `過去の走りだけで見たAIと人気の差が大きいのは ${gap.map((h) => `<b>${esc(h.name)}</b>（走りだけ${pct(h.p_ability, 0)}・人気${pct(h.p_market, 0)}）`).join("、")}。` : ""}
+    ${r.odds_time ? `<span class="small sub">オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}</p>` : ""}
+    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small sub" style="margin:0">AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。3着内率は、AI勝率どおりに勝つよう合わせた${term("展開")}のレースを何千回も走らせた結果です${r.theater ? `（<button type="button" class="linkbtn" data-tab="race">展開タブ</button>で同じレースを見られます）` : ""}。データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
 }
 
 // If rain turns the track heavy: horses that gain or lose, from the wet-track study
