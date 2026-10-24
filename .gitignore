@@ -3,3 +3,8 @@ __pycache__/
 .venv/
 data/raw/
 portal/www/data/
+portal/cache/
+data/keiba.sqlite*
+data/*.log
+data/*.pkl
+data/preds/

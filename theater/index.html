@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>レース再現</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
+<style>
+  :root{--page:#eef1ec}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--page:#111714;color-scheme:dark}}
+  :root[data-theme="dark"]{--page:#111714;color-scheme:dark}
+  body{margin:0;padding-block:0 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--page)}
+</style>
+</head>
+<body>
+<race-theater id="rt"></race-theater>
+<script type="module">
+  // ?race=<name> loads data/<name>.json
+  const name = new URLSearchParams(location.search).get("race") || "kikka2026";
+  document.getElementById("rt").setAttribute("src", `data/${encodeURIComponent(name)}.json`);
+  await import("./player.js");
+</script>
+</body>
+</html>

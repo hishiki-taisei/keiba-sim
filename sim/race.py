@@ -27,9 +27,11 @@ V_REF = 16.4         # reference pace speed for the energy model (m/s)
 ACCEL = 1.0          # m/s^2
 DECEL = 0.6          # m/s^2
 GAP = 2.5            # metres: closer than this to a horse ahead means held up
-FORM_SD = 0.02       # day-to-day variation of speed and stamina
+FORM_SD = 0.03       # day-to-day variation of speed and stamina
 PACE_SD = 0.015      # race-to-race variation of the pace
-DRAFT_SAVING = 0.08  # energy saved per step while tucked in behind a runner
+DRAFT_SAVING = 0.02  # energy saved per step while tucked in behind a runner
+EARLY_STYLE = 0.015  # early-pace difference between a front runner and a closer
+EARLY_DRIFT = 0.6    # lanes per second runners move toward the rail after the start
 
 
 @dataclass
@@ -77,7 +79,7 @@ def simulate(course: Course, horses: list[Horse], n: int = 1000, dt: float = 0.2
         # target speed by phase
         early = s < 500
         cruise = pace * (1 + 0.004 * (0.5 - style))
-        target = np.where(early, pace * (1 + 0.035 * (0.5 - style)), cruise)
+        target = np.where(early, pace * (1 + EARLY_STYLE * (0.5 - style)), cruise)
         spurt = remaining < spurt_at
         target = np.where(spurt, v_top * (1 + 0.04 * kick), target)
         target = np.minimum(target, v_top * (1 + 0.04 * kick))
@@ -97,7 +99,7 @@ def simulate(course: Course, horses: list[Horse], n: int = 1000, dt: float = 0.2
         # (never in the home straight spurt, where horses fan out instead)
         lane = np.where(blocked, lane + 1.0 * dt, lane)
         drift = ~blocked & ~spurt
-        lane = np.where(drift, np.maximum(lane - (0.6 if t < 25 else 0.2) * dt, 0.0), lane)
+        lane = np.where(drift, np.maximum(lane - (EARLY_DRIFT if t < 25 else 0.2) * dt, 0.0), lane)
         lane = np.where(spurt & ~blocked, lane + 0.05 * dt, lane)
 
         accel = ACCEL * (3.0 if t < 8 else 1.0)
