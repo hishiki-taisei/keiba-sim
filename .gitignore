@@ -2,9 +2,10 @@ __pycache__/
 *.pyc
 .venv/
 data/raw/
-portal/www/data/
-portal/cache/
 data/keiba.sqlite*
 data/*.log
 data/*.pkl
 data/preds/
+portal/www/data/
+portal/www/theater/
+portal/cache/

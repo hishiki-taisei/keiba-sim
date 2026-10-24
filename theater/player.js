@@ -48,6 +48,7 @@ const GOING_W = { "良": 0, "稍重": 0.4, "重": 0.8, "不良": 1 };   // how m
 const styleWord = s => s < 0.18 ? "逃げ" : s < 0.42 ? "先行" : s < 0.7 ? "差し" : "追込";
 
 const CSS = `
+race-theater{display:block;min-width:0;max-width:100%}
 /* course view first; controls and tables in a quiet paddock-board neutral */
 .rt{--ink:#18211c;--sub:#56625a;--rule:#d3dad3;--line:#e4e9e4;--paper:#eef1ec;--card:#ffffff;--btn:#ffffff;--btn-hover:#e3e9e3;
   --accent:#b3121b;--bar:#18211c;--bar-model:#a3ada6;--sel:#fbeec4;
