@@ -1,7 +1,7 @@
 """Build the data files for the prediction portal (portal/www).
 
     python3 portal/build.py --db /mnt/project-files/keiba-sim/data/keiba.sqlite \
-        --predictions /mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv
+        --predictions /mnt/project-files/keiba-sim/predictions/kikka2026_drawn.csv
 
 Read-only: opens the database in read-only mode and never imports the model
 code, so it can run next to the data-collection and model work. Every figure
@@ -16,6 +16,7 @@ import json
 import math
 import re
 import sqlite3
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -420,6 +421,7 @@ def race_payload(race, entrants, df, cut, payouts, preds=None):
             "trainer": e.get("trainer_name"), "stable": e.get("stable"),
             "bw": num(e.get("body_weight")), "bw_diff": num(e.get("body_weight_diff")),
             "odds": num(e.get("odds"), 1), "pop": num(e.get("popularity")),
+            "place_odds": [num(e.get("place_lo"), 1), num(e.get("place_hi"), 1)] if e.get("place_lo") == e.get("place_lo") and e.get("place_lo") is not None else None,
             "finish": num(e.get("finish")), "finish_raw": e.get("finish_raw"), "time": num(e.get("time_sec"), 1),
             "l3": num(e.get("last3f"), 1), "passing": e.get("passing"),
             "sire": clean(e.get("sire")), "damsire": clean(e.get("damsire")),
@@ -604,6 +606,25 @@ def summary(race):
     return out
 
 
+def card_entries(card):
+    """Entries, gates and current odds from a fetched race card (portal/fetch_card.py)."""
+    sys.path.insert(0, str(ROOT.parent))
+    from scraper import parse
+    e = parse.entries((card / "shutuba.html").read_text(), KIKKA["race_id"])
+    ent = pd.DataFrame([h for h in e["horses"] if h.get("number")]).drop_duplicates("number")
+    # all runners carry the set weight (57kg colts / 55kg fillies); the card's
+    # weight column is misread for some rows, so use the rule
+    ent["weight_carried"] = np.where(ent["sex"] == "牝", 55.0, 57.0)
+    odds = json.loads((card / "odds.json").read_text()) if (card / "odds.json").exists() else {}
+    key = ent["number"].map(lambda n: f"{int(n):02d}")
+    win, place = odds.get("win", {}), odds.get("place", {})
+    ent["odds"] = key.map(lambda k: float(win[k][0]) if k in win and win[k][0] else np.nan)
+    ent["popularity"] = key.map(lambda k: int(win[k][2]) if k in win and win[k][2] else np.nan)
+    ent["place_lo"] = key.map(lambda k: float(place[k][0]) if k in place and place[k][0] else np.nan)
+    ent["place_hi"] = key.map(lambda k: float(place[k][1]) if k in place and place[k][1] else np.nan)
+    return ent.reset_index(drop=True), odds.get("time")
+
+
 def read_preds(path):
     p = pd.read_csv(path)
     out = {}
@@ -619,28 +640,42 @@ def read_preds(path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="/mnt/project-files/keiba-sim/data/keiba.sqlite")
-    ap.add_argument("--predictions", default="/mnt/project-files/keiba-sim/predictions/kikka2026_preliminary.csv")
+    ap.add_argument("--predictions", default="/mnt/project-files/keiba-sim/predictions/kikka2026_drawn.csv")
     ap.add_argument("--days", type=int, default=2, help="how many recent race days to include")
+    ap.add_argument("--wet", default="/mnt/project-files/keiba-sim/predictions/kikka2026_wet_adjust.csv",
+                    help="per-horse wet-track assessment (optional)")
+    ap.add_argument("--featured-only", action="store_true", help="rebuild only the upcoming race (fast)")
     args = ap.parse_args()
 
     races, df, horses, payouts = load(args.db)
     (OUT / "race").mkdir(parents=True, exist_ok=True)
     index = {"built": pd.Timestamp.now().strftime("%Y-%m-%d"), "days": [], "featured": [], "history": []}
 
-    # Upcoming: Kikka-sho, from the prediction file
+    # Upcoming: Kikka-sho. Entries come from the race card when it has been
+    # fetched (portal/fetch_card.py), otherwise from the prediction file.
     preds = read_preds(args.predictions)
-    names = list(preds)
-    latest = horses[horses["name"].isin(names)].drop_duplicates("name", keep="last")
-    last_run = df[df["horse_name"].isin(names)].groupby("horse_name").tail(1).set_index("horse_name")
-    ent = pd.DataFrame({"horse_name": names})
-    ent = ent.merge(latest.rename(columns={"name": "horse_name"}), on="horse_name", how="left")
-    ent["sex"] = ent["horse_name"].map(last_run["sex"])
-    ent["age"] = 3
-    ent["weight_carried"] = ent["sex"].map(lambda s: 55.0 if s == "牝" else 57.0)
-    ent["jockey_name"] = [preds[n]["jockey_plan"] or last_run["jockey_name"].get(n) for n in names]
-    ent["jockey_id"] = [None if preds[n]["jockey_plan"] else last_run["jockey_id"].get(n) for n in names]
-    ent["trainer_name"] = ent["horse_name"].map(last_run["trainer_name"])
-    ent["stable"] = ent["horse_name"].map(last_run["stable"])
+    card = ROOT / "cache" / KIKKA["race_id"]
+    if (card / "shutuba.html").exists():
+        ent, odds_time = card_entries(card)
+        names = list(ent["horse_name"])
+        last_run = df[df["horse_id"].isin(ent["horse_id"])].groupby("horse_id").tail(1).set_index("horse_id")
+        ent = ent.merge(horses.drop(columns=["name"]), on="horse_id", how="left")
+        ent["trainer_name"] = ent["horse_id"].map(last_run["trainer_name"])
+        ent["stable"] = ent["horse_id"].map(last_run["stable"])
+    else:
+        odds_time = None
+        names = list(preds)
+        latest = horses[horses["name"].isin(names)].drop_duplicates("name", keep="last")
+        last_run = df[df["horse_name"].isin(names)].groupby("horse_name").tail(1).set_index("horse_name")
+        ent = pd.DataFrame({"horse_name": names})
+        ent = ent.merge(latest.rename(columns={"name": "horse_name"}), on="horse_name", how="left")
+        ent["sex"] = ent["horse_name"].map(last_run["sex"])
+        ent["age"] = 3
+        ent["weight_carried"] = ent["sex"].map(lambda s: 55.0 if s == "牝" else 57.0)
+        ent["jockey_name"] = [preds[n]["jockey_plan"] or last_run["jockey_name"].get(n) for n in names]
+        ent["jockey_id"] = [None if preds[n]["jockey_plan"] else last_run["jockey_id"].get(n) for n in names]
+        ent["trainer_name"] = ent["horse_name"].map(last_run["trainer_name"])
+        ent["stable"] = ent["horse_name"].map(last_run["stable"])
     date = pd.Timestamp(KIKKA["date"])
     # today's entries go through the same situation labelling as every past run
     for k in ("race_id", "venue", "name", "grade", "surface", "distance", "course_note"):
@@ -651,10 +686,24 @@ def main():
     ent = df[df["race_id"] == KIKKA["race_id"]].set_index("horse_name").loc[names].reset_index()
     df = df[df["race_id"] != KIKKA["race_id"]]
     kikka = race_payload({**KIKKA, "n_runners": len(ent)}, ent, df, Cutoff(df, date), payouts, preds)
-    kikka["note"] = "出走予定馬での予想です。枠順とオッズは未確定、騎手は予定または前走の騎手です。"
+    kikka["note"] = (f"枠順確定。オッズは{odds_time[5:16].replace('-', '/')}時点です（発走までに変わります）。" if odds_time
+                     else "出走予定馬での予想です。枠順とオッズは未確定、騎手は予定または前走の騎手です。")
+    kikka["odds_time"] = odds_time
+    if (card / "baba.json").exists():
+        kikka["baba"] = json.loads((card / "baba.json").read_text())
+    if Path(args.wet).exists():
+        wet = pd.read_csv(args.wet).set_index("馬")
+        for h in kikka["horses"]:
+            if h["name"] in wet.index:
+                w = wet.loc[h["name"]]
+                h["wet"] = {"grade": str(w["重以上の補正案"]), "why": str(w["根拠"])}
     (OUT / "race" / f"{KIKKA['race_id']}.json").write_text(dump(kikka))
     index["featured"].append({**summary({**KIKKA, "n_runners": len(ent)}), "upcoming": True})
     print("kikka", len(ent), "horses")
+    if args.featured_only:
+        old = json.loads((OUT / "index.json").read_text())
+        (OUT / "index.json").write_text(dump({**old, "featured": index["featured"]}))
+        return
 
     # Recent race days with full results
     days = sorted(races["date"].unique())[-args.days:]

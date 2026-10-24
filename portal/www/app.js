@@ -148,7 +148,7 @@ function raceHead(r) {
     <h1 class="rname">${esc(title(r))}${gradeTag(r.grade)}</h1>
     <div class="rcond"><span>${ymd(r.date)} ${esc(r.venue)}</span>${r.start_time ? `<span>${esc(r.start_time)}発走</span>` : ""}
       <b>${r.surface}${r.distance}m（${esc(r.direction ?? "")}${r.course_note ? "・" + esc(r.course_note) : ""}）</b>
-      <span>${r.horses.length}頭</span>${r.weather ? `<span>天候:${esc(r.weather)}</span>` : ""}${r.going ? `<span>${term("馬場")}:${esc(r.going)}</span>` : ""}</div>
+      <span>${r.horses.length}頭</span>${r.weather ? `<span>天候:${esc(r.weather)}</span>` : ""}${r.going ? `<span>${term("馬場")}:${esc(r.going)}</span>` : r.baba?.turf ? `<span>${term("馬場")}:芝${esc(r.baba.turf)}（前日発表）</span>` : ""}</div>
     <div class="rclass">${esc(r.class_text ?? "")}</div>
   </div>`;
 }
@@ -217,6 +217,7 @@ function cardView(r) {
 }
 
 // --- the checks a handicapper runs through, per horse
+const top3 = (a) => (a ? a[0] + a[1] + a[2] : 0);
 const MARKTXT = { "+": "＋", "-": "－", "": "" };
 const markCls = (m) => (m === "+" ? "sp" : m === "-" ? "sm" : "sn");
 // One row per point a handicapper checks: the horse's situation, and how every
@@ -290,7 +291,7 @@ function lookView(r) {
       ${x.h.pop ? `<div class="hs">${x.h.pop}番人気</div>` : ""}${x.h.finish ? `<div class="hs">結果 ${x.h.finish}着</div>` : ""}</td>
     <td class="small">${x.plus.map(item).join("")}${x.minus.map(item).join("")}</td></tr>`;
   const facts = trendFacts(r);
-  return `<section class="blk"><h3>脚質ごとの顔ぶれ</h3>
+  return `${babaBlock(r)}<section class="blk"><h3>脚質ごとの顔ぶれ</h3>
       <div class="tw"><table class="lineup"><thead><tr><th>${term("脚質")}</th><th>出走馬</th><th class="r">このコースの3着内率</th></tr></thead><tbody>${lineup}</tbody></table></div>
       <p class="small sub" style="margin:0">脚質は近5走で最初のコーナーを何番手で回ったかの最多。3着内率は過去5年のこのコースの値です。</p></section>
     ${facts.length ? `<section class="blk"><h3>このコースの傾向（過去5年）</h3><ul class="facts">${facts.map((x) => `<li>${x}</li>`).join("")}</ul></section>` : ""}
@@ -324,16 +325,54 @@ function ppView(r) {
 // --- AI予想
 function aiView(r) {
   const hs = r.horses.filter((h) => h.p_ai != null).sort((a, b) => b.p_ai - a.p_ai);
-  const max = hs[0]?.p_ai || 1;
-  const hasNum = hs.some((h) => h.number);
-  const rows = hs.map((h, i) => `<tr><td class="c ${i === 0 ? "ai1" : ""}">${i < 5 ? AIMARK[i] : ""}</td><td class="c">${i + 1}</td>
-    ${hasNum ? `<td class="num">${h.number ?? ""}</td>` : ""}
+  const max = Math.max(...hs.map((h) => Math.max(h.p_ai, h.p_market ?? 0)), 0.01);
+  const hasNum = hs.some((h) => h.number), hasOdds = hs.some((h) => h.odds);
+  const ev = (h) => (h.odds ? h.p_ai * h.odds : null);
+  const rows = hs.map((h, i) => {
+    const e = ev(h);
+    const pm = (h.checks || []).filter((c) => c.s === "+").length, mm = (h.checks || []).filter((c) => c.s === "-").length;
+    return `<tr><td class="c ${i === 0 ? "ai1" : ""}">${i < 5 ? AIMARK[i] : ""}</td>
+    ${hasNum ? `<td class="wk w${h.frame || 0}">${h.number ?? ""}</td>` : ""}
     <td><div class="hn">${esc(h.name)}</div><div class="hs">${esc(h.jockey ?? "")}</div></td>
-    <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div></td>
+    ${hasOdds ? `<td class="r nw">${h.odds ?? "–"}<div class="hs">${h.pop ?? "-"}番人気</div></td>` : ""}
+    <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div>
+      ${h.p_market != null ? `<div class="pbar mk"><span class="tr wide"><i style="width:${(h.p_market / max) * 100}%"></i></span><span class="hs">人気 ${pct(h.p_market)}</span></div>` : ""}</td>
+    ${hasOdds ? `<td class="r nw ${e >= 1 ? "sp" : ""}">${e != null ? e.toFixed(2) : "–"}</td>` : ""}
     <td class="r pc">${pct(h.p_sim)}</td><td class="r">${pct(h.p_sim_place, 0)}</td>
-    <td class="pc small">${(h.checks || []).filter((c) => c.s).slice(0, 3).map((c) => `<span class="${markCls(c.s)}">${MARKTXT[c.s]}</span>${esc(c.k)} `).join("")}</td></tr>`).join("");
-  return `<div class="tw"><table><thead><tr><th class="c">印</th><th class="c">順</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th><th class="r">${term("AI勝率")}</th><th class="r pc">${term("シミュ", "シミュ勝率")}</th><th class="r">${term("3着内率")}</th><th class="pc">データの＋－</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">3着内率はシミュレーションの値。印はAI勝率の上位5頭につけています。<a href="#about">計算方法</a></p>`;
+    <td class="c pc nw"><span class="sp">${pm ? "＋" + pm : ""}</span> <span class="sm">${mm ? "－" + mm : ""}</span></td></tr>`;
+  }).join("");
+  const value = hasOdds ? hs.filter((h) => ev(h) >= 1.2 && h.p_ai >= 0.05) : [];
+  return `${hasOdds ? `<p style="margin:0">${value.length ? `AI勝率が5%以上で、AI勝率×単勝オッズが1.2を超えるのは ${value.map((h) => `<b>${h.number ?? ""} ${esc(h.name)}</b>（${ev(h).toFixed(2)}）`).join("、")} です。` : "AI勝率が5%以上で、AI勝率×単勝オッズが1.2を超える馬はいません。"}${r.odds_time ? `<span class="small sub">　オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}</p>` : ""}
+    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r pc">${term("シミュ", "シミュ勝率")}</th><th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small sub" style="margin:0">今のAIは人気薄の馬を高めに見る傾向があり（テストでは本命の的中率も1番人気より低い）、期待値が1を超える馬が多めに出ます。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。AI勝率がこれより高い馬は、AIが人気より高く見ている馬です。3着内率はシミュレーションの値。データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
+}
+
+// If rain turns the track heavy: horses that gain or lose, from the wet-track study
+function wetTable(r) {
+  const hs = r.horses.filter((h) => h.wet && h.wet.grade !== "0");
+  if (!hs.length) return "";
+  const row = (h) => `<tr><td class="c ${h.wet.grade === "+" ? "sp" : "sm"}">${h.wet.grade === "+" ? "＋" : "－"}</td><td class="nw">${h.number ? waku(h.frame, h.number) + " " : ""}${esc(h.name)}</td><td class="small">${esc(h.wet.why)}</td></tr>`;
+  const up = hs.filter((h) => h.wet.grade === "+"), down = hs.filter((h) => h.wet.grade === "-");
+  return `<h4 style="margin:10px 0 4px">雨で重・不良になった場合</h4>
+    <p class="small" style="margin:0 0 4px">稍重までなら良馬場とほぼ同じ結果です（京都芝3000mの2025年・稍重の勝ち時計は良の平均と同じ）。重・不良では時計が大きくかかり、京都の長距離では上がり最速の馬が勝つ割合が45%から61%に上がります。</p>
+    <div class="tw"><table class="picks"><tbody>${[...up, ...down].map(row).join("")}</tbody></table></div>
+    <p class="small sub" style="margin:0">＋は道悪の実績や血統から重以上で評価を上げられる馬、－は下げる馬です（過去の道悪成績と父・母父の産駒が重・不良で人気よりどれだけ走ったかから判定）。</p>`;
+}
+
+function babaBlock(r) {
+  const b = r.baba;
+  if (!b) return "";
+  const wk = (b.week || []).slice(-4).map((x) => `<span class="lu">${esc(x.day)} ${esc(x.weather)}</span>`).join("");
+  return `<section class="blk"><h3>馬場と天気</h3>
+    <dl class="kv">
+      <dt>馬場状態</dt><dd>芝 ${esc(b.turf ?? "?")}・ダート ${esc(b.dirt ?? "?")}<span class="small sub">（${esc(b.as_of ?? "")}現在、JRA発表）</span></dd>
+      ${b.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%</dd>` : ""}
+      <dt>天気</dt><dd>${wk}</dd>
+      ${b.course ? `<dt>使用コース</dt><dd>${esc(b.course)}</dd>` : ""}
+      ${b.turf_note ? `<dt>芝の様子</dt><dd>${esc(b.turf_note)}</dd>` : ""}
+    </dl>
+    <p class="small sub" style="margin:0">天気は予報も含むJRAの週間情報です。</p>
+    ${wetTable(r)}</section>`;
 }
 
 // --- コースデータ

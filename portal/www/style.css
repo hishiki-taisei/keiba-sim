@@ -267,3 +267,6 @@ table.chk td { vertical-align: top; }
 .ck { font-size: 12px; color: var(--sub); }
 .cv { font-weight: 600; }
 table.chk td:first-child { white-space: normal; min-width: 9em; }
+.pbar.mk i { background: var(--sub); opacity: .55; }
+.pbar.mk { margin-top: 2px; }
+.aitab .hn { white-space: nowrap; }
