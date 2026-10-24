@@ -148,7 +148,7 @@ function raceHead(r) {
     <h1 class="rname">${esc(title(r))}${gradeTag(r.grade)}</h1>
     <div class="rcond"><span>${ymd(r.date)} ${esc(r.venue)}</span>${r.start_time ? `<span>${esc(r.start_time)}発走</span>` : ""}
       <b>${r.surface}${r.distance}m（${esc(r.direction ?? "")}${r.course_note ? "・" + esc(r.course_note) : ""}）</b>
-      <span>${r.horses.length}頭</span>${r.weather ? `<span>天候:${esc(r.weather)}</span>` : ""}${r.going ? `<span>${term("馬場")}:${esc(r.going)}</span>` : r.baba?.turf ? `<span>${term("馬場")}:芝${esc(r.baba.turf)}（前日発表）</span>` : ""}</div>
+      <span>${r.horses.length}頭</span>${r.weather ? `<span>天候:${esc(r.weather)}</span>` : ""}${r.going ? `<span>${term("馬場")}:${esc(r.going)}</span>` : r.baba?.turf ? `<span>${term("馬場")}:${(() => { const t = (r.baba.day_before || []).filter((x) => x.surface === "芝").pop(); return t ? `前日は芝${esc(GOING[t.going] ?? t.going)}・当日は雨予報` : `芝${esc(r.baba.turf)}（前日発表）`; })()}</span>` : ""}</div>
     <div class="rclass">${esc(r.class_text ?? "")}</div>
   </div>`;
 }
@@ -341,7 +341,7 @@ function aiView(r) {
   const hs = r.horses.filter((h) => h.p_ai != null).sort((a, b) => b.p_ai - a.p_ai);
   const max = Math.max(...hs.map((h) => Math.max(h.p_ai, h.p_market ?? 0)), 0.01);
   const hasNum = hs.some((h) => h.number), hasOdds = hs.some((h) => h.odds);
-  const hasAb = hs.some((h) => h.p_ability != null);
+  const hasAb = hs.some((h) => h.p_ability != null), hasSim = hs.some((h) => h.sim);
   const ev = (h) => (h.odds ? h.p_ai * h.odds : null);
   const rows = hs.map((h, i) => {
     const e = ev(h);
@@ -352,9 +352,10 @@ function aiView(r) {
     ${hasOdds ? `<td class="r nw">${h.odds ?? "–"}<div class="hs">${h.pop ?? "-"}番人気</div></td>` : ""}
     <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div>
       ${h.p_market != null ? `<div class="pbar mk"><span class="tr wide"><i style="width:${(h.p_market / max) * 100}%"></i></span><span class="hs">人気 ${pct(h.p_market)}</span></div>` : ""}</td>
+    ${hasSim ? `<td class="r nw">${h.sim ? `<b>${pct(h.sim.win)}</b><div class="hs">稍重${pct(h.sim.win_soft, 0)}・重${pct(h.sim.win_heavy, 0)}</div>` : "–"}</td>` : ""}
     ${hasAb ? `<td class="r pc">${pct(h.p_ability)}</td>` : ""}
     ${hasOdds ? `<td class="r nw ${e >= 1.1 ? "sp" : ""}">${e != null ? e.toFixed(2) : "–"}</td>` : ""}
-    <td class="r">${pct(h.p_place ?? h.p_sim_place, 0)}</td>
+    <td class="r">${pct(h.sim?.place ?? h.p_place ?? h.p_sim_place, 0)}</td>
     <td class="c pc nw"><span class="sp">${pm ? "＋" + pm : ""}</span> <span class="sm">${mm ? "－" + mm : ""}</span></td></tr>`;
   }).join("");
   const value = hasOdds ? hs.filter((h) => ev(h) >= 1.1 && h.p_ai >= 0.03) : [];
@@ -362,8 +363,8 @@ function aiView(r) {
   return `${hasOdds ? `<p style="margin:0">${value.length ? `AI勝率×単勝オッズが1.1を超えるのは ${value.map((h) => `<b>${h.number ?? ""} ${esc(h.name)}</b>（${ev(h).toFixed(2)}）`).join("、")} です。` : "AI勝率×単勝オッズが1.1を超える馬はいません。"}
     ${gap.length ? `過去の走りだけで見たAIと人気の差が大きいのは ${gap.map((h) => `<b>${esc(h.name)}</b>（走りだけ${pct(h.p_ability, 0)}・人気${pct(h.p_market, 0)}）`).join("、")}。` : ""}
     ${r.odds_time ? `<span class="small sub">オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}</p>` : ""}
-    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。3着内率は、AI勝率どおりに勝つよう合わせた${term("展開")}のレースを何千回も走らせた結果です${r.theater ? `（<button type="button" class="linkbtn" data-tab="race">展開タブ</button>で同じレースを見られます）` : ""}。データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
+    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasSim ? `<th class="r">展開シミュ<div class="hs">枠順・道悪込み</div></th>` : ""}${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small sub" style="margin:0">AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。${hasSim ? `「展開シミュ」は勝率を入力に使わず、馬ごとのスタミナ・末脚・脚質と枠順、道悪の得意不得意からレースを稍重と重で各6000回走らせて数えた勝率です（過去350レースの検証で強気すぎた分をならした値）。` : ""}${hasSim ? "3着内率もこのシミュレーションの値です。" : ""}${r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>のレース再生は、AI勝率どおりに勝つよう強さを合わせた別のシミュレーターです${hasSim ? "" : "（3着内率はその結果）"}。` : ""}データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
 }
 
 // If rain turns the track heavy: horses that gain or lose, from the wet-track study
@@ -378,19 +379,22 @@ function wetTable(r) {
     <p class="small sub" style="margin:0">＋は道悪の実績や血統から重以上で評価を上げられる馬、－は下げる馬です（過去の道悪成績と父・母父の産駒が重・不良で人気よりどれだけ走ったかから判定）。</p>`;
 }
 
+const GOING = { "稍": "稍重", "不": "不良" };
 function babaBlock(r) {
-  const b = r.baba;
-  if (!b) return "";
-  const wk = (b.week || []).slice(-4).map((x) => `<span class="lu">${esc(x.day)} ${esc(x.weather)}</span>`).join("");
+  const b = r.baba, f = r.forecast;
+  if (!b && !f) return "";
+  const prev = (b?.day_before || []);
+  const turf = prev.filter((x) => x.surface === "芝"), last = prev[prev.length - 1];
+  const now = turf.length ? turf[turf.length - 1] : null;
   return `<section class="blk"><h3>馬場と天気</h3>
     <dl class="kv">
-      <dt>馬場状態</dt><dd>芝 ${esc(b.turf ?? "?")}・ダート ${esc(b.dirt ?? "?")}<span class="small sub">（${esc(b.as_of ?? "")}現在、JRA発表）</span></dd>
-      ${b.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%</dd>` : ""}
-      <dt>天気</dt><dd>${wk}</dd>
-      ${b.course ? `<dt>使用コース</dt><dd>${esc(b.course)}</dd>` : ""}
-      ${b.turf_note ? `<dt>芝の様子</dt><dd>${esc(b.turf_note)}</dd>` : ""}
+      ${now ? `<dt>前日（土）の京都</dt><dd><b>芝 ${esc(GOING[now.going] ?? now.going)}</b>・天候 ${esc(last.weather)}<span class="small sub">（${last.r}Rの発表。${turf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
+      ${f ? `<dt>当日（日）の予報</dt><dd><b>${esc(f.text)}</b><span class="small sub">（${esc(f.as_of)}時点、${f.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join("・")}）</span></dd>` : ""}
+      ${b?.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%<span class="small sub">（${esc(b.as_of ?? "")}、雨の前の値）</span></dd>` : ""}
+      ${b?.course ? `<dt>使用コース</dt><dd>${esc(b.course)}</dd>` : ""}
+      ${b?.turf_note ? `<dt>芝の様子</dt><dd>${esc(b.turf_note)}</dd>` : ""}
     </dl>
-    <p class="small sub" style="margin:0">天気は予報も含むJRAの週間情報です。</p>
+    ${now ? `<p style="margin:0">前日から雨で芝は稍重、当日も午後に雨の予報なので、<b>稍重〜重</b>を前提に見るのが妥当です。${r.horses.some((h) => h.sim) ? "予想表の「展開シミュ」は稍重と重の平均です。" : ""}</p>` : ""}
     ${wetTable(r)}</section>`;
 }
 

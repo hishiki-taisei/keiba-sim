@@ -688,6 +688,8 @@ def main():
     ap.add_argument("--days", type=int, default=2, help="how many recent race days to include")
     ap.add_argument("--wet", default="/mnt/project-files/keiba-sim/predictions/kikka2026_wet_adjust.csv",
                     help="per-horse wet-track assessment (optional)")
+    ap.add_argument("--sim", default="/mnt/project-files/keiba-sim/predictions/kikka2026_final.csv",
+                    help="gate-aware race simulation for the featured race (optional)")
     ap.add_argument("--featured-only", action="store_true", help="rebuild only the upcoming race (fast)")
     args = ap.parse_args()
 
@@ -741,6 +743,17 @@ def main():
     kikka["odds_time"] = odds_time
     if (card / "baba.json").exists():
         kikka["baba"] = json.loads((card / "baba.json").read_text())
+    if (card / "forecast.json").exists():  # written by hand from weather sites (their APIs are blocked here)
+        kikka["forecast"] = json.loads((card / "forecast.json").read_text())
+    if Path(args.sim).exists():
+        sim = pd.read_csv(args.sim).set_index("馬")
+        for h in kikka["horses"]:
+            if h["name"] in sim.index:
+                x = sim.loc[h["name"]]
+                h["sim"] = {"win": num(x["勝率(シミュ)"], 3), "place": num(x["複勝率(シミュ)"], 3),
+                            "win_soft": num(x["勝率(稍重)"], 3), "win_heavy": num(x["勝率(重)"], 3),
+                            "place_soft": num(x["複勝率(稍重)"], 3), "place_heavy": num(x["複勝率(重)"], 3),
+                            "rank": num(x["平均着順(シミュ)"], 1)}
     if Path(args.wet).exists():
         wet = pd.read_csv(args.wet).set_index("馬")
         for h in kikka["horses"]:

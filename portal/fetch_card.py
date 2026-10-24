@@ -21,6 +21,7 @@ CARD = "https://race.netkeiba.com/race/shutuba.html?race_id={}"
 ODDS = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={}&type={}&action=update"
 BABA = "https://www.jra.go.jp/keiba/baba/index2.html"  # 京都 (index.html is 東京)
 HEADERS = {"User-Agent": "Mozilla/5.0 (keiba-sim portal)"}
+RESULT = "https://race.netkeiba.com/race/result.html?race_id={}"
 
 
 def baba(text):
@@ -49,6 +50,24 @@ def baba(text):
     return out
 
 
+def day_before(race_id):
+    """Weather and going of the races run the day before at the same meeting
+    (JRA's own page can lag a day behind; netkeiba's results show what the
+    track actually was)."""
+    prefix = race_id[:8] + f"{int(race_id[8:10]) - 1:02d}"
+    out = []
+    for r in range(1, 13):
+        res = requests.get(RESULT.format(f"{prefix}{r:02d}"), headers=HEADERS, timeout=30)
+        m = re.search(r'RaceData01.*?</div>', res.content.decode("utf-8", "replace"), re.S)
+        if not m:
+            continue
+        t = re.sub(r"<[^>]+>|&nbsp;|\s+", " ", m[0])
+        g = re.search(r"(芝|ダ)(\d+)m.*?天候:(\S+).*?馬場:(\S+)", t)
+        if g:
+            out.append({"r": r, "surface": g[1], "distance": int(g[2]), "weather": g[3], "going": g[4]})
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("race_id")
@@ -72,7 +91,9 @@ def main():
 
     r = requests.get(BABA, headers=HEADERS, timeout=30)
     if r.ok:
-        (out / "baba.json").write_text(json.dumps(baba(r.content.decode("shift_jis", "replace")), ensure_ascii=False))
+        b = baba(r.content.decode("shift_jis", "replace"))
+        b["day_before"] = day_before(args.race_id)
+        (out / "baba.json").write_text(json.dumps(b, ensure_ascii=False))
     print(out, "odds at", odds.get("time"), file=sys.stderr)
 
 
