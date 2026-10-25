@@ -179,6 +179,13 @@ def dirt_facts(rows: pd.DataFrame) -> pd.Series:
 # -- entries and odds ---------------------------------------------------------
 
 def race_ids_on(day: dt.date, f: Fetcher) -> list[str]:
+    # The race list answers 400 on days without racing, which the fetcher backs off on for minutes;
+    # the month calendar says up front whether there is racing that day.
+    cal = f.get(f"https://race.netkeiba.com/top/calendar.html?year={day:%Y}&month={day.month}",
+                f"live/calendar/{day:%Y%m}", encoding="utf-8", refresh=True) or ""
+    dates = parse.calendar_dates(cal)
+    if dates and f"{day:%Y%m%d}" not in dates:
+        return []
     html = f.get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={day:%Y%m%d}",
                  f"live/list/{day:%Y%m%d}", encoding="utf-8", refresh=True) or ""
     import re
