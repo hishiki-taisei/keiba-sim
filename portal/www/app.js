@@ -63,6 +63,39 @@ async function getJSON(path) {
   return r.json();
 }
 
+// ---------- live odds ----------
+// Races still to run read data/odds/<date>.json each time they are opened
+// (refreshed through the day by portal/fetch_odds.py). Odds, popularity and
+// the market's win rates are replaced; the AI win rate keeps the model's
+// correction to the market (AI = market × exp(correction), so the ratio of AI
+// to market stays as the model set it) and moves with the new odds.
+async function liveOdds(r) {
+  const day = state.index.days.find((d) => d.upcoming && d.date === r.date);
+  if (!day || done(r)) return;
+  let live;
+  try { live = await getJSON(`data/odds/${r.date}.json?t=${Date.now()}`); } catch { return; }
+  const o = live.races?.[r.race_id];
+  r.bets = live.bets?.[r.race_id] || [];
+  if (!o?.win) return;
+  const hs = r.horses.filter((h) => h.number && o.win[String(h.number).padStart(2, "0")]);
+  if (!hs.length) return;
+  const corr = new Map(hs.map((h) => [h, h.p_ai != null && h.p_market ? Math.log(h.p_ai / h.p_market) : null]));
+  for (const h of hs) {
+    const k = String(h.number).padStart(2, "0");
+    h.odds = o.win[k][0]; h.pop = o.win[k][2];
+    if (o.place?.[k]) h.place_odds = [o.place[k][0], o.place[k][1]];
+  }
+  const inv = hs.reduce((a, h) => a + 1 / h.odds, 0);
+  for (const h of hs) h.p_market = 1 / h.odds / inv;
+  if (hs.every((h) => corr.get(h) != null)) {
+    const raw = hs.map((h) => h.p_market * Math.exp(corr.get(h))), sum = raw.reduce((a, x) => a + x, 0);
+    hs.forEach((h, i) => { h.p_ai = raw[i] / sum; });
+  }
+  r.pairs = { umaren: o.umaren || {}, wide: o.wide || {} };
+  r.odds_time = o.time;
+  r.note = `${r.race_id === state.index.featured[0]?.race_id ? "枠順確定。" : ""}オッズは${o.time.slice(5, 16).replace("-", "/")}時点です（ページを開くたびに最新を読み込みます。発走までに変わります）。`;
+}
+
 // ---------- routing ----------
 async function route() {
   hidePop();
@@ -72,6 +105,7 @@ async function route() {
     const id = h.slice(1);
     if (state.race?.race_id !== id) {
       state.race = await getJSON(`data/race/${id}.json`);
+      await liveOdds(state.race);
       state.open = null;
       state.sort = state.race.horses.some((x) => x.number) ? { key: "num", dir: 1 } : { key: "ai", dir: -1 };
       if (!["card", "look", "pp", "ai", "race", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "race" && !state.race.theater && !state.race.replay) || (state.tab === "result" && !done(state.race))) state.tab = "card";
@@ -381,7 +415,8 @@ function aiView(r) {
   const gap = hasAb && hasOdds ? hs.filter((h) => h.p_market >= 0.03 || h.p_ability >= 0.05).sort((a, b) => Math.abs(b.p_ability - b.p_market) - Math.abs(a.p_ability - a.p_market)).slice(0, 2) : [];
   return `${hasOdds ? `<p style="margin:0">${value.length ? `AI勝率×単勝オッズが1.1を超えるのは ${value.map((h) => `<b>${h.number ?? ""} ${esc(h.name)}</b>（${ev(h).toFixed(2)}）`).join("、")} です。` : "AI勝率×単勝オッズが1.1を超える馬はいません。"}
     ${gap.length ? `過去の走りだけで見たAIと人気の差が大きいのは ${gap.map((h) => `<b>${esc(h.name)}</b>（走りだけ${pct(h.p_ability, 0)}・人気${pct(h.p_market, 0)}）`).join("、")}。` : ""}
-    ${r.odds_time ? `<span class="small sub">オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}</p>` : ""}
+    ${r.odds_time ? `<span class="small sub">オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}
+    ${done(r) ? "" : `<button type="button" class="linkbtn" data-tab="bet">買い目タブ</button>に、オッズとAI勝率から見た券種ごとの買い方があります。`}</p>` : ""}
     <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasSim ? `<th class="r">展開シミュ<div class="hs">枠順・道悪込み</div></th>` : ""}${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="small sub" style="margin:0">AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。${hasSim ? `「展開シミュ」は勝率を入力に使わず、馬ごとのスタミナ・末脚・脚質と枠順、道悪の得意不得意からレースを稍重と重で各6000回走らせて数えた勝率です（過去350レースの検証で強気すぎた分をならした値）。` : ""}${hasSim ? "3着内率もこのシミュレーションの値です。" : ""}${r.replay ? `<button type="button" class="linkbtn" data-tab="race">レース再現タブ</button>で、このシミュレーションのレースを1回ずつ見られます。` : r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>のレース再生は、AI勝率どおりに勝つよう強さを合わせた別のシミュレーターです${hasSim ? "" : "（3着内率はその結果）"}。` : ""}データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
 }
@@ -529,7 +564,7 @@ function betView(r) {
     <td class="r">${h.odds ?? "–"}</td>${r.has_ai ? `<td class="r">${pct(h.p_ai)}</td>` : ""}</tr>`).join("");
   const how = type === "単勝" || type === "複勝" ? "印をつけた馬を1点ずつ" : type === "三連単" ? "◎を1着に固定し、○▲△☆から2着・3着" : "◎から○▲△☆へ流し";
   const empty = !axis && !(type === "単勝" || type === "複勝") ? "◎をつけると買い目が出ます。" : "○▲△☆をつけると買い目が出ます。";
-  return `<div class="cols2">
+  return `${done(r) ? "" : guideView(r)}<div class="cols2">
     <section class="blk"><h3>${term("印")}</h3>
       <div class="betform"><button type="button" class="btn" id="auto">${r.has_ai ? "AIの予想どおりにつける" : "人気順につける"}</button><button type="button" class="btn" id="clear">すべて消す</button></div>
       <div class="tw"><table><thead><tr><th class="c">印</th><th class="c">枠</th><th class="c">番</th><th>馬名</th><th class="r">単勝</th>${r.has_ai ? `<th class="r">AI</th>` : ""}</tr></thead><tbody>${rows}</tbody></table></div>
@@ -543,6 +578,72 @@ function betView(r) {
       ${fin && list.length ? `<div class="tot">払戻 <b>${back.toLocaleString()}</b>円　${term("回収率")} ${Math.round((back / (list.length * 100)) * 100)}%</div>` : ""}
       ${r.seg?.surface === "芝" || r.seg?.surface === "ダ" ? `<p class="small" style="margin:8px 0 0">このレースと同じ条件（${esc([r.seg.surface, r.seg.field, r.seg.cls, r.seg.hande, r.seg.fav].filter(Boolean).join("・"))}）の過去レースで、どの買い方が当たりやすく戻りが多かったかを<a href="#strategy" id="to-strategy">買い方を比べる</a>で見られます。</p>` : ""}
     </section></div>`;
+}
+
+// --- オッズとAI勝率から見た買い方
+// Win probabilities -> top-2 and top-3 probabilities by the Harville formula
+// (the chance of finishing 2nd is the win chance among the horses left).
+function harville(p) {
+  const n = p.length, top3 = new Array(n).fill(0), pair2 = {}, pair3 = {};
+  const k = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    if (j === i) continue;
+    const pij = p[i] * p[j] / (1 - p[i]);
+    pair2[k(i, j)] = (pair2[k(i, j)] || 0) + pij;
+    for (let l = 0; l < n; l++) {
+      if (l === i || l === j) continue;
+      const pijl = pij * p[l] / (1 - p[i] - p[j]);
+      top3[i] += pijl; top3[j] += pijl; top3[l] += pijl;
+      for (const [a, b] of [[i, j], [i, l], [j, l]]) pair3[k(a, b)] = (pair3[k(a, b)] || 0) + pijl;
+    }
+  }
+  return { top3, pair2, pair3 };
+}
+
+const STRAT = {
+  fav_win: "オッズ準拠モデルの本命・単勝", fav_place: "オッズ準拠モデルの本命・複勝", value_win: "期待値1.2以上の単勝",
+  indep_win: "独自モデルの本命・単勝", indep_place: "独自モデルの本命・複勝",
+  claude_gap_win: "独自モデルが市場の3倍評価（単勝）", claude_dirt_place: "ダート1番人気＋好材料2つ（複勝）", claude_dirt_win: "ダート1番人気＋好材料3つ（単勝）",
+};
+
+function guideView(r) {
+  const hs = r.horses.filter((h) => h.number && h.p_ai != null && h.odds);
+  if (!r.has_ai || hs.length < 3) return "";
+  const sum = hs.reduce((a, h) => a + h.p_ai, 0), p = hs.map((h) => h.p_ai / sum);
+  const hv = harville(p);
+  const place = hs.map((h, i) => h.sim?.place ?? h.p_place ?? hv.top3[i]);
+  const name = (h) => `${waku(h.frame, h.number)} ${esc(h.name)}`;
+  const ev = (x) => `<b class="${x >= 1.1 ? "sp" : ""}">${x.toFixed(2)}</b>`;
+  const fav = hs.reduce((a, h) => (h.p_ai > a.p_ai ? h : a));
+  const win = hs.map((h, i) => ({ h, p: p[i], o: h.odds, e: p[i] * h.odds })).filter((x) => x.p >= 0.03).sort((a, b) => b.e - a.e).slice(0, 4);
+  const plc = hs.map((h, i) => ({ h, p: place[i], o: h.place_odds?.[0], e: h.place_odds ? place[i] * h.place_odds[0] : null }))
+    .filter((x) => x.e != null && x.p >= 0.15).sort((a, b) => b.e - a.e).slice(0, 4);
+  const pairs = (kind, prob) => {
+    const odds = r.pairs?.[kind] || {}, out = [];
+    for (let i = 0; i < hs.length; i++) for (let j = i + 1; j < hs.length; j++) {
+      const [a, b] = hs[i].number < hs[j].number ? [hs[i], hs[j]] : [hs[j], hs[i]];
+      const o = odds[`${String(a.number).padStart(2, "0")}${String(b.number).padStart(2, "0")}`];
+      const q = prob[i < j ? `${i}|${j}` : `${j}|${i}`];
+      if (o && q >= 0.04) out.push({ a, b, p: q, o: o[0], e: q * o[0] });
+    }
+    return out.sort((x, y) => y.e - x.e).slice(0, 4);
+  };
+  const umaren = pairs("umaren", hv.pair2), wide = pairs("wide", hv.pair3);
+  const row1 = (x) => `<tr><td class="nw">${name(x.h)}</td><td class="r">${pct(x.p)}</td><td class="r">${x.o ?? "–"}</td><td class="r">${x.e != null ? ev(x.e) : "–"}</td></tr>`;
+  const row2 = (x) => `<tr><td class="nw">${waku(x.a.frame, x.a.number)}-${waku(x.b.frame, x.b.number)} <span class="small pc">${esc(short(x.a.name))}・${esc(short(x.b.name))}</span></td><td class="r">${pct(x.p)}</td><td class="r">${x.o}</td><td class="r">${ev(x.e)}</td></tr>`;
+  const table = (title, rows, f, note) => rows.length ? `<h4 style="margin:10px 0 4px">${title}</h4><div class="tw"><table class="mini" style="margin:0"><thead><tr><th>買い目</th><th class="r">当たる確率</th><th class="r">オッズ</th><th class="r">期待値</th></tr></thead><tbody>${rows.map(f).join("")}</tbody></table></div>${note ? `<p class="small sub" style="margin:2px 0 0">${note}</p>` : ""}` : "";
+  const mine = (r.bets || []).map((b) => `<li>${esc(STRAT[b.strategy] || b.strategy)}：${b.number}番 ${esc(b.name)}（${b.type}、買った時点の単勝${b.odds ?? "–"}倍）</li>`).join("");
+  const anyValue = [...win, ...plc, ...umaren, ...wide].some((x) => x.e >= 1.1);
+  return `<section class="blk"><h3>オッズとAI勝率から見た買い方</h3>
+    <p style="margin:0">期待値は「当たる確率×オッズ」で、100円がAIの見立てで平均いくら戻るかです。JRAの取り分（単勝・複勝20%、馬連・ワイド22.5%）があるので、ふつうの馬券は0.8前後になります。${anyValue ? "<b>1.1を超える買い目（緑）</b>が、AIが人気より高く見ている所です。" : "今のオッズでは1.1を超える買い目はありません。期待値で選ぶなら、このレースは見送りか少額が妥当です。"}</p>
+    <dl class="kv" style="margin-top:6px"><dt>基本の一点</dt><dd>${name(fav)}の複勝${fav.place_odds ? `（${fav.place_odds[0]}〜${fav.place_odds[1]}倍）` : ""}。AIの本命の複勝は、仮想ベットで唯一プラスの買い方です（10/18の36レースで回収率110%。1日分なので参考程度）。</dd></dl>
+    ${table("単勝", win, row1, "当たる確率はAI勝率。")}
+    ${table("複勝", plc, row1, `当たる確率は3着内率${r.horses.some((h) => h.sim) ? "（展開シミュ）" : "（AI勝率から計算）"}、オッズは下限で計算。`)}
+    ${table("馬連（期待値の高い組み合わせ）", umaren, row2, "")}
+    ${table("ワイド（期待値の高い組み合わせ）", wide, row2, "馬連とワイドの確率は、AI勝率から「1着の馬を除いた残りで2着を決める」計算で出した近似です（人気馬どうしの組み合わせを少し高めに出す傾向があります）。ワイドのオッズは下限で計算。")}
+    ${mine ? `<h4 style="margin:10px 0 4px">このレースで仮想ベットしている買い方</h4><ul class="facts small">${mine}</ul>` : ""}
+    <p class="small sub" style="margin:6px 0 0">AI勝率はオッズに近い精度で、オッズを大きく上回るほどではありません（10/18の35レースで対数損失1.999、確定オッズ1.935）。期待値が1を超えても、モデルの誤差を考えると勝てる保証はありません。買い方ごとの過去の成績は<a href="#strategy">買い方を比べる</a>にあります。</p>
+  </section>`;
 }
 
 // --- 買い方を比べる
