@@ -50,11 +50,11 @@ def baba(text):
     return out
 
 
-def day_before(race_id):
-    """Weather and going of the races run the day before at the same meeting
-    (JRA's own page can lag a day behind; netkeiba's results show what the
-    track actually was)."""
-    prefix = race_id[:8] + f"{int(race_id[8:10]) - 1:02d}"
+def day_going(race_id, back=1):
+    """Weather and going announced for each race of the same meeting, `back`
+    days before the race (0 = the same day). JRA's own page can lag a day
+    behind; netkeiba's race pages show what the track actually is."""
+    prefix = race_id[:8] + f"{int(race_id[8:10]) - back:02d}"
     out = []
     for r in range(1, 13):
         res = requests.get(RESULT.format(f"{prefix}{r:02d}"), headers=HEADERS, timeout=30)
@@ -71,6 +71,7 @@ def day_before(race_id):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("race_id")
+    ap.add_argument("--no-baba", action="store_true", help="card and odds only")
     args = ap.parse_args()
     out = ROOT / "cache" / args.race_id
     out.mkdir(parents=True, exist_ok=True)
@@ -89,10 +90,11 @@ def main():
         odds["time"] = d.get("official_datetime")
     (out / "odds.json").write_text(json.dumps(odds, ensure_ascii=False))
 
-    r = requests.get(BABA, headers=HEADERS, timeout=30)
-    if r.ok:
+    r = None if args.no_baba else requests.get(BABA, headers=HEADERS, timeout=30)
+    if r is not None and r.ok:
         b = baba(r.content.decode("shift_jis", "replace"))
-        b["day_before"] = day_before(args.race_id)
+        b["day_before"] = day_going(args.race_id, 1)
+        b["same_day"] = day_going(args.race_id, 0)
         (out / "baba.json").write_text(json.dumps(b, ensure_ascii=False))
     print(out, "odds at", odds.get("time"), file=sys.stderr)
 

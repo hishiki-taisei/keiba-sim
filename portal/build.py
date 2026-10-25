@@ -621,15 +621,16 @@ def summary(race):
     return out
 
 
-def card_entries(card):
+def card_entries(card, race_id=KIKKA["race_id"], set_weight=True):
     """Entries, gates and current odds from a fetched race card (portal/fetch_card.py)."""
     sys.path.insert(0, str(ROOT.parent))
     from scraper import parse
-    e = parse.entries((card / "shutuba.html").read_text(), KIKKA["race_id"])
+    e = parse.entries((card / "shutuba.html").read_text(), race_id)
     ent = pd.DataFrame([h for h in e["horses"] if h.get("number")]).drop_duplicates("number")
-    # all runners carry the set weight (57kg colts / 55kg fillies); the card's
-    # weight column is misread for some rows, so use the rule
-    ent["weight_carried"] = np.where(ent["sex"] == "牝", 55.0, 57.0)
+    if set_weight:
+        # all Kikka-sho runners carry the set weight (57kg colts / 55kg fillies);
+        # the card's weight column is misread for some rows there, so use the rule
+        ent["weight_carried"] = np.where(ent["sex"] == "牝", 55.0, 57.0)
     odds = json.loads((card / "odds.json").read_text()) if (card / "odds.json").exists() else {}
     key = ent["number"].map(lambda n: f"{int(n):02d}")
     win, place = odds.get("win", {}), odds.get("place", {})
@@ -638,6 +639,35 @@ def card_entries(card):
     ent["place_lo"] = key.map(lambda k: float(place[k][0]) if k in place and place[k][0] else np.nan)
     ent["place_hi"] = key.map(lambda k: float(place[k][1]) if k in place and place[k][1] else np.nan)
     return ent.reset_index(drop=True), odds.get("time")
+
+
+VENUE_CODE = {"01": "札幌", "02": "函館", "03": "福島", "04": "新潟", "05": "東京",
+              "06": "中山", "07": "中京", "08": "京都", "09": "阪神", "10": "小倉"}
+GRADE_TAG = {"GI": "G1", "GII": "G2", "GIII": "G3", "G1": "G1", "G2": "G2", "G3": "G3", "L": "L", "OP": "OP"}
+GOING_SHORT = {"稍": "稍重", "不": "不良"}
+
+
+def card_meta(card, race_id, date):
+    """Race conditions from the header of a fetched race card."""
+    t = (card / "shutuba.html").read_text()
+    text = lambda cls: re.sub(r"<[^>]+>|&nbsp;|\s+", " ", (re.search(rf'class="{cls}".*?</(?:h1|div)>', t, re.S) or [""])[0]).strip()
+    d1, d2 = text("RaceData01"), text("RaceData02")
+    title = re.search(r"<title>(.*?)出馬表", t, re.S)
+    name = title[1].strip() if title else text("RaceName").replace('class="RaceName">', "").strip()
+    g = re.search(r"\((GI{1,3}|G[123]|L|OP)\)", name)
+    m = re.search(r"(\d+:\d+)発走.*?(芝|ダ|障)(\d+)m\s*\(([右左直][^)]*)\)", d1)
+    cond = m[4].replace("線", "") if m else ""
+    going = re.search(r"馬場:(\S+)", d1)
+    weather = re.search(r"天候:(\S+)", d1)
+    cls = re.findall(r"(サラ系\S+|新馬|未勝利|１勝クラス|２勝クラス|３勝クラス|オープン)", d2)
+    return {
+        "race_id": race_id, "date": date, "venue": VENUE_CODE.get(race_id[4:6], ""), "race_no": int(race_id[-2:]),
+        "name": name, "grade": GRADE_TAG.get(g[1]) if g else None,
+        "surface": m[2] if m else None, "distance": int(m[3]) if m else None,
+        "direction": "直線" if cond.startswith("直") else cond[:1], "course_note": "外" if "外" in cond else ("内" if "内" in cond else ""),
+        "class_text": " ".join(cls), "start_time": m[1] if m else None,
+        "going": GOING_SHORT.get(going[1], going[1]) if going else None, "weather": weather[1] if weather else None,
+    }
 
 
 def read_featured(path):
@@ -680,6 +710,48 @@ def copy_theater(field_path):
     return f"theater/data/{Path(field_path).name}"
 
 
+def build_today(path, df, horses, payouts, date, kikka_summary):
+    """Today's races other than the featured one: card, odds and the betting
+    model's probabilities (betting/predictions/<date>.csv)."""
+    pr = pd.read_csv(path, dtype={"race_id": str})
+    todo, ents = [], []
+    for rid, g in pr.groupby("race_id"):
+        card = ROOT / "cache" / rid
+        if rid == KIKKA["race_id"] or not (card / "shutuba.html").exists():
+            continue
+        meta = card_meta(card, rid, date)
+        if not meta["distance"]:  # jump races are not in the database
+            continue
+        ent, odds_time = card_entries(card, rid, set_weight=False)
+        last_run = df[df["horse_id"].isin(ent["horse_id"])].groupby("horse_id").tail(1).set_index("horse_id")
+        ent = ent.merge(horses.drop(columns=["name"]), on="horse_id", how="left")
+        ent["trainer_name"] = ent["horse_id"].map(last_run["trainer_name"])
+        ent["stable"] = ent["horse_id"].map(last_run["stable"])
+        for k in ("race_id", "venue", "name", "grade", "surface", "distance", "course_note"):
+            ent[k] = meta[k]
+        ent["date"], ent["n_runners"], ent["going"] = pd.Timestamp(date), len(ent), None
+        ent["finish"], ent["finish_raw"], ent["top3"], ent["win"], ent["ret"] = np.nan, None, 0, 0, 0.0
+        ents.append(ent)
+        todo.append((meta, g, odds_time))
+    if not todo:
+        return None
+    labelled = add_situations(pd.concat([df, *ents], ignore_index=True))
+    cut = Cutoff(df, pd.Timestamp(date))
+    summaries = [kikka_summary]
+    for meta, g, odds_time in todo:
+        ent = labelled[labelled["race_id"] == meta["race_id"]].sort_values("number").reset_index(drop=True)
+        indep = g["p_indep"] / g["p_indep"].sum()
+        preds = {r.horse_name: {"p_ai": num(r.p_model, 4), "p_ability": num(indep[i], 4)} for i, r in g.iterrows()}
+        race = {**meta, "n_runners": len(ent)}
+        out = race_payload(race, ent, df, cut, payouts, preds)
+        out["odds_time"] = odds_time
+        out["note"] = f"オッズは{odds_time[5:16].replace('-', '/')}時点です（発走までに変わります）。" if odds_time else None
+        (OUT / "race" / f"{meta['race_id']}.json").write_text(dump(out))
+        summaries.append(summary(race))
+    print(date, len(summaries), "races today")
+    return {"date": date, "upcoming": True, "races": summaries}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="/mnt/project-files/keiba-sim/data/keiba.sqlite")
@@ -690,6 +762,8 @@ def main():
                     help="per-horse wet-track assessment (optional)")
     ap.add_argument("--sim", default="/mnt/project-files/keiba-sim/predictions/kikka2026_final.csv",
                     help="gate-aware race simulation for the featured race (optional)")
+    ap.add_argument("--today", default=f"/mnt/project-files/keiba-sim/betting/predictions/{KIKKA['date']}.csv",
+                    help="betting model's predictions for the race day of the featured race (optional)")
     ap.add_argument("--featured-only", action="store_true", help="rebuild only the upcoming race (fast)")
     args = ap.parse_args()
 
@@ -767,13 +841,19 @@ def main():
         for h in kikka["horses"]:
             h["p_ability"] = num(ab.get(h["name"]), 4)
     kikka["theater"] = copy_theater(args.featured)
+    if (OUT.parent / "replay.html").exists():  # the gate-aware race replay (published by its own thread), on the day's going
+        turf = [x for x in kikka.get("baba", {}).get("same_day", []) if x["surface"] == "芝"]
+        going = GOING_SHORT.get(turf[-1]["going"], turf[-1]["going"]) if turf else None
+        kikka["replay"] = "replay.html" + (f"?going={going}" if going else "")
     kikka["model"] = field.get("model")
     (OUT / "race" / f"{KIKKA['race_id']}.json").write_text(dump(kikka))
     index["featured"].append({**summary({**KIKKA, "n_runners": len(ent)}), "upcoming": True})
     print("kikka", len(ent), "horses")
+    today = build_today(args.today, df, horses, payouts, KIKKA["date"], index["featured"][0]) if Path(args.today).exists() else None
     if args.featured_only:
         old = json.loads((OUT / "index.json").read_text())
-        (OUT / "index.json").write_text(dump({**old, "featured": index["featured"]}))
+        days = [d for d in old["days"] if not d.get("upcoming")] + ([today] if today else [])
+        (OUT / "index.json").write_text(dump({**old, "featured": index["featured"], "days": days}))
         return
 
     # Recent race days with full results
@@ -788,6 +868,9 @@ def main():
             (OUT / "race" / f"{r['race_id']}.json").write_text(
                 dump(race_payload(r, ent, df, cut, payouts)))
         print(pd.Timestamp(d).date(), len(day), "races")
+
+    if today:
+        index["days"].append(today)
 
     # Past Kikka-sho editions, for the history tab
     for r in races[races["name"].str.contains("菊花賞", na=False)].sort_values("date").to_dict("records"):

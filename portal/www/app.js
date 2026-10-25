@@ -74,7 +74,7 @@ async function route() {
       state.race = await getJSON(`data/race/${id}.json`);
       state.open = null;
       state.sort = state.race.horses.some((x) => x.number) ? { key: "num", dir: 1 } : { key: "ai", dir: -1 };
-      if (!["card", "look", "pp", "ai", "race", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "race" && !state.race.theater) || (state.tab === "result" && !done(state.race))) state.tab = "card";
+      if (!["card", "look", "pp", "ai", "race", "data", "result", "bet"].includes(state.tab) || (state.tab === "ai" && !state.race.has_ai) || (state.tab === "race" && !state.race.theater && !state.race.replay) || (state.tab === "result" && !done(state.race))) state.tab = "card";
     }
   } else state.race = null;
   if (h === "strategy" && !state.strat) state.strat = await getJSON("data/strategy.json");
@@ -91,13 +91,17 @@ function render() {
   else if (h === "strategy") html = strategyView();
   else html = homeView();
   $("#view").innerHTML = html;
+  fitReplay();
+  $(".daytabs [aria-selected=true]")?.scrollIntoView({ block: "nearest", inline: "end" });
   document.title = state.race ? `${state.race.name.replace(/\(G[IⅠ]+\)/, "")} | うまミル` : "うまミル";
 }
 
 // ---------- home ----------
 function homeView() {
   const idx = state.index;
-  const sel = Math.min(store.get("day", idx.days.length - 1), idx.days.length - 1);
+  // a day with races still to run opens first; the chosen tab is remembered per build
+  const up = idx.days.findIndex((d) => d.upcoming);
+  const sel = Math.min(store.get("day:" + idx.built, up >= 0 ? up : idx.days.length - 1), idx.days.length - 1);
   const day = idx.days[sel];
   const venues = [...new Set(day.races.map((r) => r.venue))];
   const maxR = Math.max(...day.races.map((r) => r.race_no));
@@ -114,7 +118,7 @@ function homeView() {
   return `
     ${f ? `<a class="next" href="#r${f.race_id}"><span class="sub small">${md(f.date)} ${esc(f.venue)}${f.race_no}R</span>
       <b>${esc(title(f))}${gradeTag(f.grade)}</b>
-      <span class="small">${f.surface}${f.distance}m　出走予定${f.n_runners}頭　AI予想あり</span></a>` : ""}
+      <span class="small">${f.surface}${f.distance}m　${f.n_runners}頭　AI予想・レース再現あり</span></a>` : ""}
     <div>
       <div class="daytabs" role="tablist">${idx.days.map((d, i) => `<button type="button" role="tab" data-day="${i}" aria-selected="${i === sel}">${md(d.date)}</button>`).join("")}</div>
       <div class="tw" style="border-top:0"><table class="grid-races">
@@ -148,7 +152,7 @@ function raceHead(r) {
     <h1 class="rname">${esc(title(r))}${gradeTag(r.grade)}</h1>
     <div class="rcond"><span>${ymd(r.date)} ${esc(r.venue)}</span>${r.start_time ? `<span>${esc(r.start_time)}発走</span>` : ""}
       <b>${r.surface}${r.distance}m（${esc(r.direction ?? "")}${r.course_note ? "・" + esc(r.course_note) : ""}）</b>
-      <span>${r.horses.length}頭</span>${r.weather ? `<span>天候:${esc(r.weather)}</span>` : ""}${r.going ? `<span>${term("馬場")}:${esc(r.going)}</span>` : r.baba?.turf ? `<span>${term("馬場")}:${(() => { const t = (r.baba.day_before || []).filter((x) => x.surface === "芝").pop(); return t ? `前日は芝${esc(GOING[t.going] ?? t.going)}・当日は雨予報` : `芝${esc(r.baba.turf)}（前日発表）`; })()}</span>` : ""}</div>
+      <span>${r.horses.length}頭</span>${r.weather ? `<span>天候:${esc(r.weather)}</span>` : ""}${r.going ? `<span>${term("馬場")}:${esc(r.going)}</span>` : r.baba?.turf ? `<span>${term("馬場")}:${(() => { const t = (r.baba.day_before || []).filter((x) => x.surface === "芝").pop(); const d = (r.baba.same_day || []).filter((x) => x.surface === "芝").pop(); return d ? `芝${esc(GOING[d.going] ?? d.going)}（当日発表）` : t ? `前日は芝${esc(GOING[t.going] ?? t.going)}・当日は雨予報` : `芝${esc(r.baba.turf)}（前日発表）`; })()}</span>` : ""}</div>
     <div class="rclass">${esc(r.class_text ?? "")}</div>
   </div>`;
 }
@@ -156,7 +160,7 @@ function raceHead(r) {
 function raceView(r) {
   const tabs = [["card", "出馬表"], ["look", "見どころ"], ["pp", "馬柱"]];
   if (r.has_ai) tabs.push(["ai", "AI予想"]);
-  if (r.theater) tabs.push(["race", "展開"]);
+  if (r.replay || r.theater) tabs.push(["race", r.replay ? "レース再現" : "展開"]);
   tabs.push(["data", "データ"]);
   if (done(r)) tabs.push(["result", "結果"]);
   tabs.push(["bet", "買い目"]);
@@ -326,6 +330,10 @@ function ppView(r) {
 // --- 展開 (the race replay, the same component as theater/)
 let theaterLoaded = false;
 function theaterView(r) {
+  if (r.replay) {
+    return `<p class="small sub" style="margin:0">各馬の巡航速度・スタミナ・最高速度・脚質と枠順でコースを走らせます。勝率はどこにも入力しておらず、「1000回走らせる」の勝率は走らせた結果を数えたものです（AI予想タブの「展開シミュ」と同じしくみ）。馬場は今日の発表に合わせてあり、再現の中で切り替えられます。</p>
+    <iframe class="replay" src="${esc(r.replay)}" title="レース再現" loading="lazy"></iframe>`;
+  }
   if (!theaterLoaded) {
     theaterLoaded = true;
     const s = document.createElement("script");
@@ -334,6 +342,17 @@ function theaterView(r) {
   }
   return `<p class="small sub" style="margin:0">各馬の${term("脚質")}・末脚・スタミナでコースを走らせます。「もう一回」で毎回違うレースになり、何千回も走らせるとAI勝率どおりの割合で勝つように合わせてあります。ペースや馬場を変えると、得意不得意で勝率が動きます。</p>
     <div class="theater"><race-theater src="${esc(r.theater)}"></race-theater></div>`;
+}
+
+// The replay is its own page in a frame; grow the frame to the page's height.
+function fitReplay() {
+  const f = document.querySelector("iframe.replay");
+  if (!f) return;
+  const fit = () => { try { f.style.height = f.contentDocument.documentElement.scrollHeight + "px"; } catch { /* keep the CSS height */ } };
+  f.addEventListener("load", () => {
+    fit();
+    try { new ResizeObserver(fit).observe(f.contentDocument.body); } catch { /* not same-origin */ }
+  });
 }
 
 // --- AI予想
@@ -364,7 +383,7 @@ function aiView(r) {
     ${gap.length ? `過去の走りだけで見たAIと人気の差が大きいのは ${gap.map((h) => `<b>${esc(h.name)}</b>（走りだけ${pct(h.p_ability, 0)}・人気${pct(h.p_market, 0)}）`).join("、")}。` : ""}
     ${r.odds_time ? `<span class="small sub">オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}</p>` : ""}
     <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasSim ? `<th class="r">展開シミュ<div class="hs">枠順・道悪込み</div></th>` : ""}${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small sub" style="margin:0">AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。${hasSim ? `「展開シミュ」は勝率を入力に使わず、馬ごとのスタミナ・末脚・脚質と枠順、道悪の得意不得意からレースを稍重と重で各6000回走らせて数えた勝率です（過去350レースの検証で強気すぎた分をならした値）。` : ""}${hasSim ? "3着内率もこのシミュレーションの値です。" : ""}${r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>のレース再生は、AI勝率どおりに勝つよう強さを合わせた別のシミュレーターです${hasSim ? "" : "（3着内率はその結果）"}。` : ""}データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
+    <p class="small sub" style="margin:0">AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。${hasSim ? `「展開シミュ」は勝率を入力に使わず、馬ごとのスタミナ・末脚・脚質と枠順、道悪の得意不得意からレースを稍重と重で各6000回走らせて数えた勝率です（過去350レースの検証で強気すぎた分をならした値）。` : ""}${hasSim ? "3着内率もこのシミュレーションの値です。" : ""}${r.replay ? `<button type="button" class="linkbtn" data-tab="race">レース再現タブ</button>で、このシミュレーションのレースを1回ずつ見られます。` : r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>のレース再生は、AI勝率どおりに勝つよう強さを合わせた別のシミュレーターです${hasSim ? "" : "（3着内率はその結果）"}。` : ""}データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
 }
 
 // If rain turns the track heavy: horses that gain or lose, from the wet-track study
@@ -386,15 +405,17 @@ function babaBlock(r) {
   const prev = (b?.day_before || []);
   const turf = prev.filter((x) => x.surface === "芝"), last = prev[prev.length - 1];
   const now = turf.length ? turf[turf.length - 1] : null;
+  const day = (b?.same_day || []), dturf = day.filter((x) => x.surface === "芝"), dnow = dturf[dturf.length - 1];
   return `<section class="blk"><h3>馬場と天気</h3>
     <dl class="kv">
+      ${dnow ? `<dt>当日（日）の京都</dt><dd><b>芝 ${esc(GOING[dnow.going] ?? dnow.going)}</b>・天候 ${esc(day[day.length - 1].weather)}<span class="small sub">（netkeibaの各レースの発表。${dturf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
       ${now ? `<dt>前日（土）の京都</dt><dd><b>芝 ${esc(GOING[now.going] ?? now.going)}</b>・天候 ${esc(last.weather)}<span class="small sub">（${last.r}Rの発表。${turf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
       ${f ? `<dt>当日（日）の予報</dt><dd><b>${esc(f.text)}</b><span class="small sub">（${esc(f.as_of)}時点、${f.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join("・")}）</span></dd>` : ""}
-      ${b?.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%<span class="small sub">（${esc(b.as_of ?? "")}、雨の前の値）</span></dd>` : ""}
+      ${b?.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%<span class="small sub">（JRA発表の最新値）</span></dd>` : ""}
       ${b?.course ? `<dt>使用コース</dt><dd>${esc(b.course)}</dd>` : ""}
       ${b?.turf_note ? `<dt>芝の様子</dt><dd>${esc(b.turf_note)}</dd>` : ""}
     </dl>
-    ${now ? `<p style="margin:0">前日から雨で芝は稍重、当日も午後に雨の予報なので、<b>稍重〜重</b>を前提に見るのが妥当です。${r.horses.some((h) => h.sim) ? "予想表の「展開シミュ」は稍重と重の平均です。" : ""}</p>` : ""}
+    ${dnow ? `<p style="margin:0">今日の京都芝は<b>${esc(GOING[dnow.going] ?? dnow.going)}</b>の発表です。下の「雨で重・不良になった場合」の表がそのまま当てはまります。${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、重の列（下段）を重く見てください。" : ""}</p>` : now ? `<p style="margin:0">前日から雨で芝は稍重、当日も午後に雨の予報なので、<b>稍重〜重</b>を前提に見るのが妥当です。${r.horses.some((h) => h.sim) ? "予想表の「展開シミュ」は稍重と重の平均です。" : ""}</p>` : ""}
     ${wetTable(r)}</section>`;
 }
 
@@ -613,7 +634,7 @@ document.addEventListener("click", (ev) => {
   if (tm) { ev.preventDefault(); ev.stopPropagation(); showPop(tm); return; }
   hidePop();
   const day = t.closest("[data-day]");
-  if (day) { store.set("day", Number(day.dataset.day)); return render(); }
+  if (day) { store.set("day:" + state.index.built, Number(day.dataset.day)); return render(); }
   const tab = t.closest("[data-tab]");
   if (tab) { state.tab = tab.dataset.tab; state.open = null; return render(); }
   const sort = t.closest("th[data-sort]");
