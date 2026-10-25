@@ -57,8 +57,9 @@ def going(day):
     with ThreadPoolExecutor(3) as ex:
         out = {k: v for d in ex.map(venue, sorted({r["race_id"][:10] for r in day["races"]})) for k, v in d.items()}
     for k, v in (json.loads(OVERRIDE.read_text()) if OVERRIDE.exists() else {}).items():
-        if k in out and out[k]["going"] != v["going"]:
-            out[k] = {**out[k], "announced": out[k]["going"], **v}
+        # only while netkeiba still shows what it showed when the report came in
+        if k in out and out[k]["going"] == v["was"]:
+            out[k] = {**out[k], "going": v["going"], "reported": v["reported"]}
     return out
 
 
