@@ -78,6 +78,8 @@ async function liveOdds(r) {
   if (r.baba) {
     const venue = Object.entries(live.going || {}).filter(([k]) => k.slice(0, 10) === r.race_id.slice(0, 10)).map(([, x]) => x);
     if (venue.length) r.baba.same_day = venue.sort((a, b) => a.r - b.r);
+    const turf = r.baba.same_day.filter((x) => x.surface === "芝").pop();
+    if (r.replay && turf) r.replay = r.replay.replace(/going=[^&]*/, `going=${encodeURIComponent(GOING[turf.going] ?? turf.going)}`);
     if (live.jra?.moisture) Object.assign(r.baba, { moisture: live.jra.moisture, as_of: live.jra.as_of });
   } else if (g) {
     r.going = GOING[g.going] ?? g.going; r.weather = g.weather;
@@ -452,14 +454,14 @@ function babaBlock(r) {
   const day = (b?.same_day || []), dturf = day.filter((x) => x.surface === "芝"), dnow = dturf[dturf.length - 1];
   return `<section class="blk"><h3>馬場と天気</h3>
     <dl class="kv">
-      ${dnow ? `<dt>当日（日）の京都</dt><dd><b>芝 ${esc(GOING[dnow.going] ?? dnow.going)}</b>・天候 ${esc(day[day.length - 1].weather)}<span class="small sub">（${r.going_time ? `${esc(r.going_time)}に取得した` : ""}netkeibaの各レースの発表。${dturf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
+      ${dnow ? `<dt>当日（日）の京都</dt><dd><b>芝 ${esc(GOING[dnow.going] ?? dnow.going)}</b>・天候 ${esc(day[day.length - 1].weather)}<span class="small sub">（${dnow.reported ? `${esc(dnow.reported)}。` : ""}${r.going_time ? `${esc(r.going_time)}に取得した` : ""}netkeibaの各レースの発表。${dturf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
       ${now ? `<dt>前日（土）の京都</dt><dd><b>芝 ${esc(GOING[now.going] ?? now.going)}</b>・天候 ${esc(last.weather)}<span class="small sub">（${last.r}Rの発表。${turf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
       ${f ? `<dt>当日（日）の予報</dt><dd><b>${esc(f.text)}</b><span class="small sub">（${esc(f.as_of)}時点、${f.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join("・")}）</span></dd>` : ""}
       ${b?.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%<span class="small sub">（JRA発表の最新値${b.as_of ? `、${esc(b.as_of)}` : ""}）</span></dd>` : ""}
       ${b?.course ? `<dt>使用コース</dt><dd>${esc(b.course)}</dd>` : ""}
       ${b?.turf_note ? `<dt>芝の様子</dt><dd>${esc(b.turf_note)}</dd>` : ""}
     </dl>
-    ${dnow ? `<p style="margin:0">今日の京都芝は<b>${esc(GOING[dnow.going] ?? dnow.going)}</b>の発表です（${dnow.r}Rの時点）。${["重", "不"].includes(dnow.going) ? `下の「雨で重・不良になった場合」の表がそのまま当てはまります。${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、重の列（下段）を重く見てください。" : ""}` : dnow.going === "稍" ? `${dturf.some((x) => x.going === "重") ? "朝の重から回復してきています。" : ""}${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、稍重の列（上段）を重く見てください。" : ""}` : ""}</p>` : now ? `<p style="margin:0">前日から雨で芝は稍重、当日も午後に雨の予報なので、<b>稍重〜重</b>を前提に見るのが妥当です。${r.horses.some((h) => h.sim) ? "予想表の「展開シミュ」は稍重と重の平均です。" : ""}</p>` : ""}
+    ${dnow ? `<p style="margin:0">今日の京都芝は<b>${esc(GOING[dnow.going] ?? dnow.going)}</b>の発表です（${dnow.r}Rの時点）。${["重", "不"].includes(dnow.going) ? `下の「雨で重・不良になった場合」の表がそのまま当てはまります。${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、重の列（下段）を重く見てください。" : ""}` : dnow.going === "良" ? `朝の重から良まで回復しました。${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重で計算したもので、良馬場では計算していません。シミュの数字は参考程度に見てください。" : ""}` : dnow.going === "稍" ? `${dturf.some((x) => x.going === "重") ? "朝の重から回復してきています。" : ""}${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、稍重の列（上段）を重く見てください。" : ""}` : ""}</p>` : now ? `<p style="margin:0">前日から雨で芝は稍重、当日も午後に雨の予報なので、<b>稍重〜重</b>を前提に見るのが妥当です。${r.horses.some((h) => h.sim) ? "予想表の「展開シミュ」は稍重と重の平均です。" : ""}</p>` : ""}
     ${wetTable(r)}</section>`;
 }
 

@@ -25,6 +25,7 @@ from fetch_card import BABA, baba, day_going
 
 ROOT = Path(__file__).resolve().parent
 ODDS = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={}&type={}&action=update"
+OVERRIDE = ROOT / "going_override.json"  # going reported before netkeiba shows it
 BETS = Path("/mnt/project-files/keiba-sim/betting/bets.csv")
 HEADERS = {"User-Agent": "Mozilla/5.0 (keiba-sim portal)"}
 TYPES = {"win": 1, "place": 2, "umaren": 4, "wide": 5}
@@ -54,7 +55,11 @@ def going(day):
             print(prefix, "going not read:", e, file=sys.stderr)
             return {}
     with ThreadPoolExecutor(3) as ex:
-        return {k: v for d in ex.map(venue, sorted({r["race_id"][:10] for r in day["races"]})) for k, v in d.items()}
+        out = {k: v for d in ex.map(venue, sorted({r["race_id"][:10] for r in day["races"]})) for k, v in d.items()}
+    for k, v in (json.loads(OVERRIDE.read_text()) if OVERRIDE.exists() else {}).items():
+        if k in out and out[k]["going"] != v["going"]:
+            out[k] = {**out[k], "announced": out[k]["going"], **v}
+    return out
 
 
 def jra_kyoto():
