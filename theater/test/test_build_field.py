@@ -38,5 +38,20 @@ class Features(unittest.TestCase):
         self.assertEqual(build_field.sections(1200), (420.0, 420.0, 600))
 
 
+class Predictions(unittest.TestCase):
+    def test_reads_predict_output_and_old_csv(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            new = Path(d) / "new.csv"
+            new.write_text("race_id,horse_id,horse_name,jockey_name,number,p_ability,odds,p_market,p_win,model\n"
+                           "1,9,アルファ,武豊,3,0.2,,,0.25,gbdt\n1,8,ベータ,,,0.8,,,0.75,gbdt\n", encoding="utf-8")
+            e = build_field.entries_from_csv(str(new), "ignored")
+            self.assertEqual([(x["name"], x["jockey"], x["gate"], x["p"]) for x in e],
+                             [("アルファ", "武豊", 3, 0.25), ("ベータ", "", None, 0.75)])
+            old = Path(d) / "old.csv"
+            old.write_text("馬,騎手,勝率(モデル)\nアルファ,武豊,0.3\n", encoding="utf-8")
+            self.assertEqual(build_field.entries_from_csv(str(old), "勝率(モデル)")[0]["p"], 0.3)
+
+
 if __name__ == "__main__":
     unittest.main()
