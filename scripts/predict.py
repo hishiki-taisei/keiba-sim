@@ -1,14 +1,26 @@
-"""Predict an upcoming race and write it for the web app.
+"""Win probabilities for an upcoming race, in the one format every screen reads.
 
-    python3 scripts/predict.py 202608040911 kikka2026
+    python3 scripts/predict.py 202608040911                    # entries from race.netkeiba.com
+    python3 scripts/predict.py 202608040911 --odds odds.csv    # also correct the odds (horse_name,odds)
+    python3 scripts/predict.py 202608040911 --going 稍重
 
-Fetches the entries from race.netkeiba.com, builds each horse's features as of
-race day, scores them with the win model (trained on every race up to the
-week before) and runs the simulator. Before the draw the gates are unknown,
-so the race is run with several random draws and the results averaged.
-Writes web/data/<name>.json.
+Fetches the entries, builds each horse's features as of race day and scores
+them with the win model (gradient boosting, trained on every turf race up to
+the week before; see experiments/model-log.md, gbdt_going_rel). When odds are
+given, a second model starts from the odds and learns only where the market is
+off (offset_pace2); that becomes the main probability.
+
+Writes data/preds/<race_id>.csv with these columns:
+
+    race_id, horse_id, horse_name, jockey_name, number,
+    p_ability  win probability from past form only (no odds)
+    odds       the odds that were given, if any
+    p_market   probability implied by those odds
+    p_win      the probability the site and the race replay use:
+               the odds-corrected model when odds were given, else p_ability
+    model      which model produced p_win
 """
-import json
+import argparse
 import sys
 from pathlib import Path
 
@@ -18,79 +30,77 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from model import features  # noqa: E402
+from model import evaluate, features  # noqa: E402
 from model.data import load_runs  # noqa: E402
 from model.gbdt import GBDT  # noqa: E402
-from model.to_sim import SimParams, course_for, horses  # noqa: E402
 from scraper import parse  # noqa: E402
 from scraper.fetch import Fetcher  # noqa: E402
-from sim.export import build, write  # noqa: E402
-from sim.race import probabilities, simulate  # noqa: E402
 
-SIMULATED = ["early_pos5", "gate_rel", "kick5", "early_pos5_rel"]
-WIN_FEATURES = features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES
-SIM_FEATURES = [f for f in WIN_FEATURES if f not in SIMULATED]
-N_SIM = 4000
+ABILITY = features.FEATURES + features.GOING_FEATURES + features.REL_FEATURES
+OFFSET = ABILITY + features.PACE_FEATURES
+OUT = ROOT / "data" / "preds"
 
 
-def main(race_id: str, name: str):
+def log_market(df):
+    return np.log(np.clip(evaluate.market_probs(df), 1e-6, 1.0))
+
+
+def fetch_entries(race_id: str) -> dict:
     f = Fetcher(ROOT / "data" / "raw", interval=1.2)
     html = f.get(f"https://race.netkeiba.com/race/shutuba.html?race_id={race_id}",
                  f"entries/{race_id}", encoding="utf-8", refresh=True)
     race = parse.entries(html, race_id)
-    drawn = all(h["number"] for h in race["horses"])
-    print(f"{race['title']} {race['date']} {race['distance']}m  {len(race['horses'])} horses, drawn={drawn}")
+    if race is None:
+        raise SystemExit(f"no entries on the netkeiba page for {race_id}")
+    return race
 
+
+def read_odds(path: str) -> dict:
+    o = pd.read_csv(path)
+    return dict(zip(o["horse_name"], o["odds"].astype(float)))
+
+
+def predict(race: dict, going: str = "良", odds: dict | None = None) -> pd.DataFrame:
     df = load_runs()
     F = pd.read_pickle(ROOT / "data" / "features_turf.pkl")
     F = F[F["odds"].notna() & (F["field"] >= 5) & (F["date"] < pd.Timestamp(race["date"]))]
-    # Gradient boosting, stopped on the most recent year of races.
+    # stopped on the most recent year of races
     last = F["date"] >= pd.Timestamp(race["date"]) - pd.Timedelta(days=365)
-    model = GBDT(WIN_FEATURES, rounds=800).fit(F[~last], F[last])
-    strength = GBDT(SIM_FEATURES, rounds=800).fit(F[~last], F[last])
-    prm = SimParams(**json.loads((ROOT / "data" / "sim_backtest.json").read_text())["params"])
+    rows = features.for_entries(df, race, going=going).reset_index(drop=True)
+    ability = GBDT(ABILITY, rounds=800).fit(F[~last], F[last])
+    out = pd.DataFrame({"race_id": race["race_id"], "horse_id": rows["horse_id"], "horse_name": rows["horse_name"],
+                        "jockey_name": rows["jockey_name"],
+                        "number": [h["number"] for h in race["horses"]],
+                        "p_ability": ability.predict(rows).round(4)})
+    out["odds"], out["p_market"] = np.nan, np.nan
+    out["p_win"], out["model"] = out["p_ability"], "gbdt_going_rel"
+    if odds:
+        missing = [n for n in out["horse_name"] if n not in odds]
+        if missing:
+            raise SystemExit(f"no odds for: {', '.join(missing)}")
+        rows["odds"] = rows["horse_name"].map(odds)
+        out["odds"] = rows["odds"]
+        out["p_market"] = evaluate.market_probs(rows).round(4)
+        offset = GBDT(OFFSET, base=log_market, rounds=800).fit(F[~last], F[last])
+        out["p_win"], out["model"] = offset.predict(rows).round(4), "offset_pace2"
+    return out
 
-    rows = features.for_entries(df, race).reset_index(drop=True)
-    p_model = model.predict(rows)
-    score = strength.score(rows)
-    hs = horses(rows, score, prm)
-    course = course_for(race["distance"])
 
-    if drawn:
-        p = probabilities(simulate(course, hs, n=N_SIM, seed=0))
-        win, place, mrank = p["win"], p["place"], p["mean_rank"]
-    else:
-        rng = np.random.default_rng(0)
-        win, place, mrank = np.zeros(len(hs)), np.zeros(len(hs)), np.zeros(len(hs))
-        draws = 10
-        for k in range(draws):
-            gates = rng.permutation(len(hs)) + 1
-            for h, g in zip(hs, gates):
-                h.gate = int(g)
-            p = probabilities(simulate(course, hs, n=N_SIM // draws, seed=k))
-            win += p["win"] / draws
-            place += p["place"] / draws
-            mrank += p["mean_rank"] / draws
-        for i, h in enumerate(hs):
-            h.gate = i + 1
-
-    table = pd.DataFrame({"馬": rows["horse_name"], "騎手": rows["jockey_name"],
-                          "勝率(シミュ)": win.round(3), "複勝率(シミュ)": place.round(3),
-                          "勝率(モデル)": p_model.round(3),
-                          "speed": [h.speed for h in hs], "stamina": [h.stamina for h in hs],
-                          "kick": [h.kick for h in hs], "style": [h.style for h in hs]})
-    print(table.sort_values("勝率(シミュ)", ascending=False).to_string(index=False))
-
-    note = ("過去の全レースから推定した能力値で走らせた予想です。"
-            + ("" if drawn else "枠順が未確定のため、枠をランダムに10通り変えて平均しています。リプレイの枠は仮です。"))
-    data = build(course, hs, n=N_SIM, seed=1, title=race["title"].replace(" 出馬表", ""), note=note)
-    for h, w, pl, mr, pm in zip(data["horses"], win, place, mrank, p_model):
-        h.update(win=round(float(w), 4), place=round(float(pl), 4), mean_rank=round(float(mr), 2),
-                 model_win=round(float(pm), 4))
-    write(data, ROOT / "web" / "data" / f"{name}.json")
-    table.to_csv(ROOT / "data" / f"{name}.csv", index=False)
-    print(f"wrote web/data/{name}.json")
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("race_id")
+    ap.add_argument("--going", default="良", help="expected ground: 良・稍重・重・不良")
+    ap.add_argument("--odds", help="CSV with horse_name,odds (win odds)")
+    a = ap.parse_args()
+    race = fetch_entries(a.race_id)
+    print(f"{race['title']} {race['date']} {race['distance']}m  {len(race['horses'])} horses")
+    out = predict(race, a.going, read_odds(a.odds) if a.odds else None)
+    OUT.mkdir(parents=True, exist_ok=True)
+    path = OUT / f"{a.race_id}.csv"
+    out.to_csv(path, index=False)
+    print(out.sort_values("p_win", ascending=False).to_string(index=False))
+    print(f"wrote {path}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main()

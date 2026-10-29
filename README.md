@@ -1,30 +1,39 @@
 # keiba-sim
 
-過去のレースデータから各馬の能力を推定し、簡易的にモデル化したコースで馬を
-実際に何千回も走らせて、勝率・複勝率を予想するシミュレーターです。
-目標は2026年の菊花賞（京都 芝3000m）の予想です。
+JRAの過去のレースデータから各馬の勝率を予想し、予想サイト「うまミル」で見せるプロジェクトです。
+コース上を馬が走るレース再現も、うまミルの「展開」タブに入っています。目標は2026年の菊花賞（京都 芝3000m）の予想です。
 
-## いまできること
+## 全体の流れ
 
-- 京都 芝3000m（外回り）のコースモデル：コーナー、直線、3コーナーの坂（2回通過）
-- レースシミュレーション（`sim/race.py`）：各馬がスピード・スタミナ・瞬発力・脚質・馬番を持ち、
-  ペース、スタミナ消費、坂、コーナーの外回りロス、前が詰まる・後ろにつけて脚をためる、を再現
-- モンテカルロで勝率・複勝率・平均着順を計算
-- ブラウザでレースを再生するアプリ（`web/`）
+数字は1本の流れで作り、サイトとレース再現が同じ値を出すようにしています。
 
-デモは架空の馬にランダムな能力値を与えたもので、実際の予想ではありません。
+| 段 | 場所 | 出力 |
+|---|---|---|
+| データ | `scraper/` | `data/keiba.sqlite`（2015年〜のJRA全レース） |
+| 予想 | `model/`、`scripts/predict.py` | `data/preds/<race_id>.csv`（`horse_name`・`number`・`p_win` など） |
+| レース再現 | `theater/` | `theater/data/<名前>.json`（脚質・末脚・スタミナ、`p_win` に合わせた強さ、何千回走らせた3着内率） |
+| サイト | `portal/` | `portal/www/`（静的サイト。勝率・3着内率・脚質はレース再現のファイルから読む） |
 
-## 使い方
+菊花賞は、出馬表の取得から予想・レース再現・サイトまで1コマンドで作り直せます。
 
 ```bash
-pip install -r requirements.txt
-python3 scripts/demo.py          # web/data/demo.json を作る
-python3 -m unittest              # テスト
-cd web && python3 -m http.server # http://localhost:8000 で表示
+scripts/build_site.sh                     # 出走予定・枠順は netkeiba の出馬表から（枠順確定後に再実行）
+scripts/build_site.sh --odds odds.csv     # オッズが出たら（horse_name,odds）。オッズ補正した勝率に切り替わる
+scripts/build_site.sh --going 稍重         # 当日の馬場
+cd portal/www && python3 -m http.server   # http://localhost:8000
 ```
 
-`web/` はそのまま Cloudflare Pages に置ける静的サイトです。
-別のレースは `web/data/<名前>.json` に置き、`?race=<名前>` で表示します。
+`data/keiba.sqlite`（または `KEIBA_DB`）と `data/features_turf.pkl`（`python3 scripts/backtest.py --rebuild` で作成）が必要です。
+
+テスト：
+
+```bash
+python3 -m unittest                                      # scraper・model・portal
+python3 -m unittest discover -s theater/test -p "test_*.py"
+node --test theater/test/*.test.mjs
+```
+
+`sim/` と `web/`（最初の京都3000m専用のシミュレーターと再生画面）は `theater/` に置き換わったため、菊花賞のあとに削除する予定です。
 
 ## データ収集（`scraper/`）
 
@@ -88,11 +97,12 @@ python3 scripts/experiment.py market linear_v1 gbdt_going   # 学習して記録
 ## レースの予想（`scripts/predict.py`）
 
 ```bash
-python3 scripts/predict.py 202608040911 kikka2026   # 菊花賞2026 → web/data/kikka2026.json
+python3 scripts/predict.py 202608040911                   # → data/preds/202608040911.csv
+python3 scripts/predict.py 202608040911 --odds odds.csv   # オッズ補正した勝率も出す
 ```
 
-出馬表を取得し、レース当日時点の能力値で勝率モデルとシミュレーターを動かします。枠順が出る前は、枠をランダムに
-10通り変えて平均します。結果は `?race=kikka2026` で表示できます。
+出馬表を取得し、レース当日時点の特徴量で勝率を出します。オッズが無いうちは過去の走りだけのモデル（`gbdt_going_rel`）、
+オッズを渡すとオッズを出発点にずれだけを直すモデル（`offset_pace2`）の値が `p_win` になります。
 
 ## 計画
 
@@ -100,3 +110,21 @@ python3 scripts/predict.py 202608040911 kikka2026   # 菊花賞2026 → web/data
 2. 能力値の推定：過去の走りから各馬のスピード・スタミナ・瞬発力・脚質を推定
 3. 検証：年で学習用とテスト用に分けて実際の着順と比べ、馬券の買い方ごとの回収率も確認
 4. 公開：Cloudflare Pages。菊花賞の枠順確定後に予想を更新
+
+## 予想サイト うまミル（`portal/`）
+
+競馬新聞の出馬表の作法に寄せた予想サイトです。出馬表は必要な列だけにし、馬の行を押すと成績・血統・近走が開きます。
+DBを読み出し専用で開きます。注目レースの勝率・3着内率・脚質はレース再現のファイル（`--featured`）から読み、
+レース再現の部品と一緒に `portal/www/theater/` に置いて「展開」タブで表示します。
+
+```bash
+python3 portal/build.py --db data/keiba.sqlite --featured theater/data/kikka2026.json
+cd portal/www && python3 -m http.server   # http://localhost:8000
+```
+
+- 菊花賞2026（出走予定馬）、直近の開催日の全レース、過去の菊花賞を `portal/www/data/` に書き出します（`--days` で日数を変更、既定は2）
+- 画面：レース一覧（日付×競馬場×R）／出馬表／馬柱（近5走）／AI予想／展開（レース再現）／コースデータ／結果・払戻／見どころ／印と買い目（結果の答え合わせ）／買い方を比べる／AIの仕組み
+- 脚質はレース再現と同じ決め方（近8走の最初のコーナーの位置、新しい走りほど重く、`theater/tools/build_field.py`）です
+- 近走・騎手・種牡馬・コース傾向の数字は、そのレースの日より前のレースだけで集計しています
+- チェック項目：前走着順・間隔・距離の変化・乗り替わりなどを全出走について同じ規則でラベル付けし、各馬と同じ状況だった過去5年の全馬の3着内率・単勝回収率を出します（`build.py` の `SITUATIONS`）。平均の1.2倍以上で＋、0.8倍以下で－です。新しいレースにもそのまま使えます
+- 買い方を比べる：人気だけで決まる10通りの買い方の的中率・回収率を、芝ダ・頭数・クラス・ハンデ・1番人気のオッズの組み合わせごとに集計して `data/strategy.json` に書き出します

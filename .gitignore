@@ -6,3 +6,7 @@ data/keiba.sqlite*
 data/*.log
 data/*.pkl
 data/preds/
+portal/www/data/
+portal/www/theater/
+portal/cache/
+portal/www/replay.html
