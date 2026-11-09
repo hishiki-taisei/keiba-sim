@@ -33,6 +33,9 @@ class Fetcher:
             time.sleep(pause - dt)
         self._last = time.monotonic()
 
+    def cached(self, key: str) -> bool:
+        return (self.cache_dir / f"{key}.html.gz").exists()
+
     def get(self, url: str, key: str, encoding: str = "euc-jp", refresh: bool = False) -> str | None:
         """Return the page text, or None on 404. ``key`` is the cache path relative to cache_dir."""
         path = self.cache_dir / f"{key}.html.gz"
