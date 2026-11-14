@@ -33,12 +33,15 @@ class Fetcher:
             time.sleep(pause - dt)
         self._last = time.monotonic()
 
-    def get(self, url: str, key: str, encoding: str = "euc-jp", refresh: bool = False) -> str | None:
+    def cached(self, key: str) -> bool:
+        return (self.cache_dir / f"{key}.html.gz").exists()
+
+    def get(self, url: str, key: str, encoding: str = "euc-jp", refresh: bool = False, tries: int = 5) -> str | None:
         """Return the page text, or None on 404. ``key`` is the cache path relative to cache_dir."""
         path = self.cache_dir / f"{key}.html.gz"
         if path.exists() and not refresh:
             return gzip.decompress(path.read_bytes()).decode(encoding, "replace")
-        for attempt in range(5):
+        for attempt in range(tries):
             self._wait()
             try:
                 r = self.session.get(url, timeout=self.timeout)
@@ -49,6 +52,8 @@ class Fetcher:
             if r.status_code == 404:
                 return None
             if r.status_code in (400, 403, 429) or r.status_code >= 500:
+                if attempt + 1 == tries:
+                    break
                 # Back off hard: the site is asking us to slow down (it also answers 400 at times).
                 time.sleep(60 * (attempt + 1))
                 continue

@@ -5,6 +5,8 @@ form features use only the horse's previous runs.
 """
 from __future__ import annotations
 
+import unicodedata
+
 import numpy as np
 import pandas as pd
 
@@ -19,6 +21,10 @@ REL_FEATURES = ["pop5_rel", "jockey_rel", "y5_rel", "best_y3_rel", "fin5_rel", "
 V2_FEATURES = ["bw_diff", "bw_rel", "bw_vs_best", "trainer", "trainer_rel",
                "pace_favor5", "pace5", "bias_front_x", "bias_inner_x", "bias_front", "bias_inner", "bias_n"]
 PACE_FEATURES = ["pace_favor5", "pace5", "pace_fig5", "pace_best3", "pace_fig5_rel", "pace_best3_rel"]
+# v3, "other angles" the market may weigh differently: course and distance record, class
+# change, jockey change, second run after a break, strength of the last race's field.
+ANGLE_FEATURES = ["venue_apt", "venue_runs", "dist_apt", "class_num", "class_change", "jockey_up",
+                  "jockey_change", "second_up", "last_field_y5", "handicap"]
 FEATURES = ["rating", "slope", "unrated", "log_runs", "early_pos5", "kick5",
             "days_off", "last_fin", "fin5", "pop5", "earnings", "dist_change",
             "weight_rel", "gate_rel", "jockey", "female", "age", "last_y", "best_y3", "y5", "ped_long"]
@@ -134,6 +140,55 @@ def day_bias(df: pd.DataFrame) -> pd.DataFrame:
     return df[["race_id"]].join(res, on="race_id").drop(columns="race_id")
 
 
+def class_level(class_text: pd.Series, grade: pd.Series) -> pd.Series:
+    """Race class on one scale: maiden 0, 1/2/3勝 (old 500/1000/1600万) 1-3, open 4, L 4.5, G3-G1 5-7."""
+    t = class_text.fillna("").map(lambda x: unicodedata.normalize("NFKC", x))
+    lvl = pd.Series(np.nan, index=t.index)
+    for pat, v in [("新馬|未勝利", 0.0), ("1勝|500万", 1.0), ("2勝|1000万", 2.0), ("3勝|1600万", 3.0), ("オープン", 4.0)]:
+        lvl = lvl.where(lvl.notna() | ~t.str.contains(pat), v)
+    g = grade.map({"L": 4.5, "OP": 4.0, "G3": 5.0, "G2": 6.0, "G1": 7.0}) if grade is not None else np.nan
+    return pd.Series(np.where(pd.notna(g), g, lvl), index=t.index).fillna(4.0)
+
+
+def angle(df: pd.DataFrame) -> pd.DataFrame:
+    """ANGLE_FEATURES from previous runs only. Needs form() and the jockey column."""
+    hid = df["horse_id"]
+    g = df.groupby(hid, sort=False)
+    out = pd.DataFrame(index=df.index)
+    y = pd.Series(rating_mod.relative_speed(df), index=df.index)
+    base = y.groupby(hid).transform(lambda s: s.shift().expanding().mean())
+
+    def record(key):
+        k = hid.astype(str) + "|" + key.astype(str)
+        yy = y.fillna(0.0)
+        has = y.notna().astype(float)
+        s = yy.groupby(k).cumsum() - yy
+        n = has.groupby(k).cumsum() - has
+        return s / (n + 2.0), n  # shrunk toward 0
+
+    vy, vn = record(df["venue"])
+    out["venue_apt"] = (vy - base.fillna(0.0) * vn / (vn + 2.0)).fillna(0.0)
+    out["venue_runs"] = np.log1p(vn)
+    dy, dn = record((df["distance"] // 400))
+    out["dist_apt"] = (dy - base.fillna(0.0) * dn / (dn + 2.0)).fillna(0.0)
+    lvl = class_level(df["class_text"] if "class_text" in df else pd.Series("", index=df.index),
+                      df["grade"] if "grade" in df else None)
+    out["class_num"] = lvl
+    out["class_change"] = (lvl - lvl.groupby(hid).shift()).fillna(0.0)
+    jk = df["jockey"]
+    out["jockey_up"] = (jk - jk.groupby(hid).shift()).fillna(0.0)
+    out["jockey_change"] = (df["jockey_id"] != df.groupby(hid)["jockey_id"].shift()).astype(float)
+    off = g["date"].diff().dt.days
+    out["second_up"] = ((off.groupby(hid).shift() >= 70) & (off < 70)).astype(float)
+    # How strong the field of the horse's last race was (mean recent figure of its runners).
+    y5 = y.groupby(hid).transform(lambda s: s.shift().rolling(5, min_periods=1).mean())
+    field_y5 = y5.groupby(df["race_id"]).transform("mean")
+    out["last_field_y5"] = field_y5.groupby(hid).shift()
+    ct = df["class_text"].fillna("") if "class_text" in df else pd.Series("", index=df.index)
+    out["handicap"] = ct.str.contains("ハンデ").astype(float)
+    return out
+
+
 def jockey_strength(df: pd.DataFrame, key: str = "jockey_id") -> pd.Series:
     """Jockey (or trainer) top-3 rate over the previous 365 days (shrunk toward the mean)."""
     top3 = (df["finish"] <= 3).astype(float)
@@ -161,6 +216,7 @@ def build(df: pd.DataFrame, start: str = "2018-01", asof: pd.Timestamp | None = 
     df["jockey"] = jockey_strength(df)
     df["trainer"] = jockey_strength(df, "trainer_id")
     df = df.join(day_bias(df))
+    df = df.join(angle(df))
     months = pd.date_range(start, df["date"].max() + pd.offsets.MonthBegin(1), freq="MS")
     parts = []
     for m0, m1 in zip(months[:-1], months[1:]):
@@ -206,6 +262,7 @@ def build(df: pd.DataFrame, start: str = "2018-01", asof: pd.Timestamp | None = 
         out[c + "_rel"] = out[c] - out.groupby("race_id")[c].transform("mean")
     for c in ["bias_front", "bias_inner", "bias_n"]:
         out[c] = out[c].fillna(0.0)
+    out["last_field_y5"] = (out["last_field_y5"] - out.groupby("race_id")["last_field_y5"].transform("mean")).fillna(0.0)
     out["trainer_rel"] = out["trainer"] - out.groupby("race_id")["trainer"].transform("mean")
     out["bias_front_x"] = out["bias_front"] * (out["early_pos5"] - 0.5)
     out["bias_inner_x"] = out["bias_inner"] * (out["gate_rel"] - 0.5)
@@ -236,3 +293,10 @@ def for_entries(df: pd.DataFrame, race: dict, going: str = "良") -> pd.DataFram
     all_ = pd.concat([hist, rows], ignore_index=True)
     out = build(all_, start=date.strftime("%Y-%m"), asof=date)
     return out[out["race_id"] == race["race_id"]]
+
+
+# Odds-free model: the horse's own record only. Today's odds are not used, and neither is past
+# popularity, so it judges horses from a different angle than the market.
+INDEP_FEATURES = list(dict.fromkeys(
+    c for c in FEATURES + GOING_FEATURES + REL_FEATURES + PACE_FEATURES + ["trainer", "trainer_rel"] + ANGLE_FEATURES
+    if c not in ("pop5", "pop5_rel")))

@@ -208,6 +208,13 @@ def pedigree(html: str, horse_id: str) -> dict | None:
             "sire_sire": siresire, "sire_sire_id": siresire_id}
 
 
+def _grade(title: str) -> str | None:
+    m = re.search(r"\((G[1-3]|GI{1,3}|L|OP)\)", title)
+    if not m:
+        return None
+    return {"GI": "G1", "GII": "G2", "GIII": "G3"}.get(m.group(1), m.group(1))
+
+
 def entries(html: str, race_id: str) -> dict | None:
     """race.netkeiba.com/race/shutuba.html -> race conditions and the entered horses.
 
@@ -220,13 +227,25 @@ def entries(html: str, race_id: str) -> dict | None:
     data01 = b.select_one(".RaceData01")
     cond = data01.get_text(" ", strip=True) if data01 else ""
     dist = re.search(r"(\d+)m", cond)
+    course = re.search(r"(障|芝|ダ)\S*\d+m", cond)
+    surface = {"障": "障", "芝": "芝"}.get(course.group(1) if course else "", "ダ")
+    going = re.search(r"馬場\s*:\s*(良|稍重|稍|重|不良|不)", cond)
+    post = re.search(r"(\d{1,2}:\d{2})発走", cond)
+    data02 = b.select_one(".RaceData02")
+    cls = data02.get_text(" ", strip=True) if data02 else ""
+    m_cls = re.search(r"\S*(新馬|未勝利|勝クラス|オープン|万下)\S*(?:\s+\S+)*?\s+(定量|別定|ハンデ|馬齢)", cls)
     title = b.title.get_text() if b.title else ""
     date = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", title)
-    out = []
+    out, seen = [], set()
     for r in rows:
         horse_a = r.find("a", href=re.compile(r"/horse/\d+"))
         if horse_a is None:
             continue
+        hid = re.search(r"/horse/(\d+)", horse_a["href"]).group(1)
+        # The page repeats some horses in other tables further down; keep the entry row only.
+        if hid in seen or r.select_one("td[class^=Umaban]") is None:
+            continue
+        seen.add(hid)
         cells = r.find_all("td")
         txt = [c.get_text(" ", strip=True) for c in cells]
         sexage = next((t for t in txt if re.fullmatch(r"[牡牝セ]\d+", t)), "")
@@ -245,8 +264,45 @@ def entries(html: str, race_id: str) -> dict | None:
             "jockey_id": _id(jockey_a, "jockey"),
             "jockey_name": jockey_a.get_text(strip=True) if jockey_a else None,
             "odds": _num(odds.get_text(strip=True)) if odds else None,
+            "scratched": "Cancel" in " ".join(r.get("class", [])) or "取消" in " ".join(txt) or "除外" in " ".join(txt),
         })
     return {"race_id": race_id, "title": title.split("|")[0].strip(),
             "date": f"{date.group(1)}-{int(date.group(2)):02d}-{int(date.group(3)):02d}" if date else None,
-            "surface": "芝" if cond.startswith("芝") else "ダ", "distance": int(dist.group(1)) if dist else None,
+            "surface": surface, "distance": int(dist.group(1)) if dist else None,
+            "going": going.group(1) if going else None, "post_time": post.group(1) if post else None,
+            "class_text": m_cls.group(0) if m_cls else cls, "grade": _grade(title),
             "horses": out}
+
+
+def result_page(html: str, race_id: str) -> dict | None:
+    """race.netkeiba.com/race/result.html -> finishing order, win odds and win/place payouts.
+
+    Up the same evening, while the db.netkeiba.com race page can lag by days; used to settle bets.
+    """
+    b = soup(html)
+    table = b.select_one("table#All_Result_Table") or b.select_one("table.RaceTable01")
+    if table is None:
+        return None
+    results = []
+    for r in table.select("tr.HorseList"):
+        txt = [c.get_text(" ", strip=True) for c in r.find_all("td")]
+        if len(txt) < 11:
+            continue
+        num = _num(txt[2], int)
+        if num is None:
+            continue
+        fr = txt[0][:1] if txt[0][:1] in ("取", "除", "中", "失") else txt[0]  # 取消 -> 取, as in the DB
+        results.append({"race_id": race_id, "number": num, "finish_raw": fr, "finish": _num(txt[0], int),
+                        "odds": _num(txt[10])})
+    payouts = []
+    for tr in b.select("table.Payout_Detail_Table tr"):
+        th = tr.find("th")
+        kind = th.get_text(strip=True) if th else ""
+        if kind not in ("単勝", "複勝"):
+            continue
+        res, pay = tr.select_one("td.Result"), tr.select_one("td.Payout")
+        nums = [s.get_text(strip=True) for s in res.find_all("span") if s.get_text(strip=True)] if res else []
+        yen = re.findall(r"([\d,]+)円", pay.get_text(" ")) if pay else []
+        for n, y in zip(nums, yen):
+            payouts.append({"race_id": race_id, "bet_type": kind, "combo": n, "payout": int(y.replace(",", ""))})
+    return {"results": results, "payouts": payouts} if results else None
