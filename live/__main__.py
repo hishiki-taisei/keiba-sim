@@ -190,11 +190,38 @@ def race_ids_on(day: dt.date, f: Fetcher) -> list[str]:
     dates = parse.calendar_dates(cal)
     if dates and f"{day:%Y%m%d}" not in dates:
         return []
-    html = f.get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={day:%Y%m%d}",
-                 f"live/list/{day:%Y%m%d}", encoding="utf-8", refresh=True) or ""
     import re
+    try:
+        html = f.get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={day:%Y%m%d}",
+                     f"live/list/{day:%Y%m%d}", encoding="utf-8", refresh=True, tries=2) or ""
+    except RuntimeError:
+        html = guess_race_list(day, f) if dates else ""
     ids = sorted(set(re.findall(r"race_id=(\d{12})", html)))
     return [i for i in ids if i[4:6] in parse.VENUES and i[:4] == f"{day:%Y}"]
+
+
+def guess_race_list(day: dt.date, f: Fetcher) -> str:
+    """When the race list keeps answering 400: the meetings of the last race day in the DB, one day on.
+    An entries page links race 1 of every venue that day, so it also catches a meeting that just started."""
+    import re
+    con = sqlite3.connect(LOCAL_DB)
+    last = con.execute("SELECT MAX(date) FROM races WHERE date < ?", (day.isoformat(),)).fetchone()[0]
+    prefixes = {r[0] for r in con.execute("SELECT DISTINCT substr(race_id, 1, 10) FROM races WHERE date = ?", (last,))}
+    con.close()
+    for p in sorted(prefixes):
+        rid = f"{p[:8]}{int(p[8:10]) + 1:02d}01"
+        try:
+            html = f.get(f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}", f"live/entries/{rid}",
+                         encoding="utf-8", refresh=True) or ""
+        except RuntimeError:
+            continue
+        title = re.search(r"<title>[^<]*?(\d{4})年(\d{1,2})月(\d{1,2})日", html)
+        if not title or dt.date(*map(int, title.groups())) != day:
+            continue
+        firsts = {i for i in re.findall(r"race_id=(\d{12})", html) if i[10:] == "01"}
+        print(f"race list unavailable; guessed meetings from {rid}: {sorted(firsts)}", flush=True)
+        return " ".join(f"race_id={i[:10]}{n:02d}" for i in firsts for n in range(1, 13))
+    return ""
 
 
 def win_odds(race_id: str, f: Fetcher) -> tuple[dict, str]:
