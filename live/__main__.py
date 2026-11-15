@@ -624,7 +624,11 @@ def main(argv=None):
         bet(day)
         report()
     elif a.cmd == "night":
-        update()
+        try:
+            update()
+        except RuntimeError as e:
+            # netkeiba answers 400 for a while at times; settle from the results pages and catch up the DB next night.
+            print("update failed, settling anyway:", e, flush=True)
         settle()
         sync_out()
         if not a.no_train:
