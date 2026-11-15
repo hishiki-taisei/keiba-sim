@@ -183,7 +183,7 @@ def race_ids_on(day: dt.date, f: Fetcher) -> list[str]:
     # the month calendar says up front whether there is racing that day.
     url = f"https://race.netkeiba.com/top/calendar.html?year={day:%Y}&month={day.month}"
     try:
-        cal = f.get(url, f"live/calendar/{day:%Y%m}", encoding="utf-8", refresh=True) or ""
+        cal = f.get(url, f"live/calendar/{day:%Y%m}", encoding="utf-8", refresh=True, tries=2) or ""
     except RuntimeError:
         # The site answers 400 for a while at times; last fetch of the month is good enough to plan the day.
         cal = f.get(url, f"live/calendar/{day:%Y%m}", encoding="utf-8") if f.cached(f"live/calendar/{day:%Y%m}") else ""
