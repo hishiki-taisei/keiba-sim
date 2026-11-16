@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import re
 import random
 import time
 from pathlib import Path
@@ -40,7 +41,7 @@ class Fetcher:
         """Return the page text, or None on 404. ``key`` is the cache path relative to cache_dir."""
         path = self.cache_dir / f"{key}.html.gz"
         if path.exists() and not refresh:
-            return gzip.decompress(path.read_bytes()).decode(encoding, "replace")
+            return _decode(gzip.decompress(path.read_bytes()), encoding)
         for attempt in range(tries):
             self._wait()
             try:
@@ -60,5 +61,14 @@ class Fetcher:
             r.raise_for_status()
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(gzip.compress(r.content))
-            return r.content.decode(encoding, "replace")
+            return _decode(r.content, encoding)
         raise RuntimeError(f"giving up on {url}")
+
+
+def _decode(raw: bytes, encoding: str) -> str:
+    """Decode with the charset the page declares, falling back to ``encoding``
+    (db.netkeiba moved from EUC-JP to UTF-8 in November 2026)."""
+    m = re.search(rb"charset=[\"']?([A-Za-z0-9_-]+)", raw[:4096])
+    if m:
+        encoding = m.group(1).decode("ascii").lower()
+    return raw.decode(encoding, "replace")
