@@ -626,7 +626,7 @@ def main(argv=None):
     elif a.cmd == "night":
         try:
             update()
-        except RuntimeError as e:
+        except Exception as e:  # noqa: BLE001
             # netkeiba answers 400 for a while at times; settle from the results pages and catch up the DB next night.
             print("update failed, settling anyway:", e, flush=True)
         settle()

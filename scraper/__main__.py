@@ -67,7 +67,14 @@ def cmd_races(args, con, f: Fetcher):
             con.execute("UPDATE race_queue SET status='error' WHERE race_id=?", (rid,))
             con.commit()
             continue
-        d = parse.race(html, rid) if html else None
+        try:
+            d = parse.race(html, rid) if html else None
+        except (AttributeError, ValueError, IndexError) as e:
+            # A page in an unexpected shape (e.g. results only partly published); retry it on a later run.
+            print(rid, "unparsable:", e, flush=True)
+            con.execute("UPDATE race_queue SET status='error' WHERE race_id=?", (rid,))
+            con.commit()
+            continue
         if d is None:
             con.execute("UPDATE race_queue SET status='missing' WHERE race_id=?", (rid,))
         else:
