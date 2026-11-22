@@ -33,7 +33,8 @@ def months(start: str, end: str):
 
 
 def cmd_days(args, con, f: Fetcher):
-    today = dt.date.today().strftime("%Y%m%d")
+    today = dt.date.today()
+    today = (today + dt.timedelta(days=1) if args.include_today else today).strftime("%Y%m%d")
     for y, m in months(args.start, args.end):
         html = f.get(f"https://race.netkeiba.com/top/calendar.html?year={y}&month={m}",
                      f"calendar/{y}{m:02d}", encoding="euc-jp",
@@ -45,10 +46,11 @@ def cmd_days(args, con, f: Fetcher):
     # Race ids per day.
     todo = [r[0] for r in con.execute("SELECT date FROM race_days WHERE listed=0 ORDER BY date DESC")]
     for i, d in enumerate(todo):
-        html = f.get(f"https://db.netkeiba.com/race/list/{d}/", f"list/{d}")
+        html = f.get(f"https://db.netkeiba.com/race/list/{d}/", f"list/{d}", refresh=True)
         ids = parse.race_ids(html or "")
         con.executemany("INSERT OR IGNORE INTO race_queue(race_id, date) VALUES (?, ?)", [(r, d) for r in ids])
-        con.execute("UPDATE race_days SET listed=1 WHERE date=?", (d,))
+        if ids:  # an empty list means the results are not up yet: look again next run
+            con.execute("UPDATE race_days SET listed=1 WHERE date=?", (d,))
         con.commit()
         print(f"[{i + 1}/{len(todo)}] {d}: {len(ids)} races", flush=True)
 
@@ -65,7 +67,14 @@ def cmd_races(args, con, f: Fetcher):
             con.execute("UPDATE race_queue SET status='error' WHERE race_id=?", (rid,))
             con.commit()
             continue
-        d = parse.race(html, rid) if html else None
+        try:
+            d = parse.race(html, rid) if html else None
+        except (AttributeError, ValueError, IndexError) as e:
+            # A page in an unexpected shape (e.g. results only partly published); retry it on a later run.
+            print(rid, "unparsable:", e, flush=True)
+            con.execute("UPDATE race_queue SET status='error' WHERE race_id=?", (rid,))
+            con.commit()
+            continue
         if d is None:
             con.execute("UPDATE race_queue SET status='missing' WHERE race_id=?", (rid,))
         else:
@@ -142,6 +151,7 @@ def main(argv=None):
     p = sub.add_parser("days")
     p.add_argument("--from", dest="start", default="2015-01")
     p.add_argument("--to", dest="end", default=dt.date.today().strftime("%Y-%m"))
+    p.add_argument("--include-today", action="store_true", help="also list today (run after the last race)")
     for name in ("races", "peds"):
         sub.add_parser(name).add_argument("--limit", type=int, default=0)
     sub.add_parser("reparse")
