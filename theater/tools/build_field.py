@@ -294,3 +294,11 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def style_word(x):
+    """Running style word from the relative first-corner position (0 = leads, 1 = last).
+    Thresholds match the published うまミル data."""
+    if x is None:
+        return None
+    return "逃げ" if x < 0.18 else "先行" if x < 0.425 else "差し" if x < 0.7 else "追込"
