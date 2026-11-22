@@ -68,6 +68,7 @@ STRATEGIES = {  # key: (group, label)
     "claude_dirt_win": ("Claudeの買い方", "ダート1番人気＋好材料3つ以上（単勝）"),
 }
 GAP_RATIO, GAP_MAX_ODDS = 3.0, 20.0
+GAP_SURFACE = "芝"  # validated on turf only (experiments/strategies.md); the dirt version tested at ~81%
 # Dirt facts that held up on 2018-2023 and on 2024- for the favourite (experiments/rules.md):
 # strong field last time, wide draw, dropping in distance, ran against the pace, high speed figure.
 DIRT_FACTS = {"last_field_y5": (0.8, ">="), "gate_rel": (0.8, ">="), "dist_change": (0.2, "<="),
@@ -361,7 +362,8 @@ def bet(day: dt.date):
                 itop = d.loc[d["p_indep"].idxmax()]
                 picks += [("indep_win", "単勝", itop), ("indep_place", "複勝", itop)]
                 picks += [("claude_gap_win", "単勝", h) for _, h in d.iterrows()
-                          if h["p_indep"] >= GAP_RATIO * h["p_market"] and h["odds"] < GAP_MAX_ODDS]
+                          if surface == GAP_SURFACE and h["p_indep"] >= GAP_RATIO * h["p_market"]
+                          and h["odds"] < GAP_MAX_ODDS]
                 fav = d.loc[d["pop_rank"].idxmin()]
                 if surface == "ダ" and fav["facts"] >= 2:
                     picks.append(("claude_dirt_place", "複勝", fav))
@@ -552,7 +554,7 @@ def report():
              f"- **オッズ準拠モデル**：オッズを出発点に補正するモデル。本命の単勝・複勝を全レース、勝率×オッズが{EV_MIN}以上の馬の単勝。"
              "障害レースはモデルがないので1番人気を本命にしています。",
              "- **独自モデル**：オッズも過去の人気も使わず、馬の走りの記録（スピード指数、近走、ペース、コース・距離の得意、昇級降級、騎手の格上げ、前走の相手の強さなど）だけで勝率を出すモデル。本命の単勝・複勝を芝・ダートの全レース。",
-             f"- **Claudeの買い方**：過去データ（2018〜2023年で選び、2024年以降で確認）から決めたルール。独自モデルの勝率が市場の{GAP_RATIO:.0f}倍以上で{GAP_MAX_ODDS:.0f}倍未満の馬の単勝。"
+             f"- **Claudeの買い方**：過去データ（2018〜2023年で選び、2024年以降で確認）から決めたルール。芝のレースで、独自モデルの勝率が市場の{GAP_RATIO:.0f}倍以上で{GAP_MAX_ODDS:.0f}倍未満の馬の単勝（11/22からダートは対象外）。"
              "ダートの1番人気のうち、好材料（前走の相手が強い・外枠・距離短縮・前走でペースが不利・スピード指数上位）が2つ以上なら複勝、3つ以上なら単勝も。"
              "検証は[experiments/strategies.md](https://github.com/hishiki-taisei/keiba-sim/blob/main/experiments/strategies.md)と[rules.md](https://github.com/hishiki-taisei/keiba-sim/blob/main/experiments/rules.md)。", ""]
     if s.empty:
