@@ -412,8 +412,14 @@ def results_for(ids: list[str], fetch: bool = True) -> tuple[pd.DataFrame, pd.Da
         f = Fetcher(ROOT / "data" / "raw", interval=1.2)
         new = []
         for rid in todo:
-            html = f.get(f"https://race.netkeiba.com/race/result.html?race_id={rid}", f"live/result/{rid}",
-                         encoding="utf-8", refresh=True)
+            # The site answers 400 to a share of requests at times; many quick tries get through
+            # where a few long backoffs do not. A race that still fails stays open for the next run.
+            try:
+                html = f.get(f"https://race.netkeiba.com/race/result.html?race_id={rid}", f"live/result/{rid}",
+                             encoding="utf-8", refresh=True, tries=12, backoff=5)
+            except RuntimeError as e:
+                print(e, flush=True)
+                continue
             d = parse.result_page(html or "", rid)
             if d and d["payouts"]:
                 new += [dict(r, kind="result") for r in d["results"]] + [dict(p, kind="payout") for p in d["payouts"]]

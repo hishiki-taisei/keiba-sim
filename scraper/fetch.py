@@ -37,7 +37,8 @@ class Fetcher:
     def cached(self, key: str) -> bool:
         return (self.cache_dir / f"{key}.html.gz").exists()
 
-    def get(self, url: str, key: str, encoding: str = "euc-jp", refresh: bool = False, tries: int = 5) -> str | None:
+    def get(self, url: str, key: str, encoding: str = "euc-jp", refresh: bool = False, tries: int = 5,
+            backoff: float = 60) -> str | None:
         """Return the page text, or None on 404. ``key`` is the cache path relative to cache_dir."""
         path = self.cache_dir / f"{key}.html.gz"
         if path.exists() and not refresh:
@@ -56,7 +57,7 @@ class Fetcher:
                 if attempt + 1 == tries:
                     break
                 # Back off hard: the site is asking us to slow down (it also answers 400 at times).
-                time.sleep(60 * (attempt + 1))
+                time.sleep(backoff * (attempt + 1))
                 continue
             r.raise_for_status()
             path.parent.mkdir(parents=True, exist_ok=True)
