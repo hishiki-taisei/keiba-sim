@@ -626,12 +626,13 @@ def main(argv=None):
         bet(day)
         report()
     elif a.cmd == "night":
+        # Settle first: it needs only one results page per race, while the DB update fetches hundreds of
+        # pages and can get us refused (400) for hours.
+        settle()
         try:
             update()
         except Exception as e:  # noqa: BLE001
-            # netkeiba answers 400 for a while at times; settle from the results pages and catch up the DB next night.
-            print("update failed, settling anyway:", e, flush=True)
-        settle()
+            print("update failed, catching up next night:", e, flush=True)
         sync_out()
         if not a.no_train:
             train()
