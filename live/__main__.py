@@ -390,9 +390,35 @@ def bet(day: dt.date):
         p.to_csv(path, index=False)
     if new:
         write_bets(pd.concat([existing, pd.DataFrame(new)], ignore_index=True))
+    write_gap_notice(day, [b for b in new if b["strategy"] == "claude_gap_win"], preds)
     n_races = len({b["race_id"] for b in new})
     print(f"placed {len(new)} paper bets on {n_races} races ({sum(b['stake'] for b in new)} yen)")
     return new
+
+
+def write_gap_notice(day: dt.date, picks: list[dict], preds: list[dict]):
+    """The turf 3x horses of the day, for the person who buys them for real themselves (we never buy).
+    Odds move before the off, so each line gives the odds band where the horse still meets the rule:
+    p_indep / p_market >= GAP_RATIO with p_market = (1/odds) / S, i.e. odds >= GAP_RATIO / (p_indep * S),
+    S being the race's sum of 1/odds at bet time (taken as fixed), and odds < GAP_MAX_ODDS."""
+    path = OUT / "notify" / f"{day.isoformat()}.md"
+    if not picks:
+        print("gap picks: 0", flush=True)
+        return
+    P = pd.DataFrame(preds)
+    lines = [f"# {day.isoformat()} 芝の3倍評価馬（実際の購入はご自身で）", "",
+             "| 発走 | レース | 馬 | 朝のオッズ | 独自モデル | 市場 | 差 | 条件内のオッズ |", "|---|---|---|---|---|---|---|---|"]
+    for b in sorted(picks, key=lambda b: (b["post_time"] or "", b["race_id"])):
+        d = P[P["race_id"] == b["race_id"]]
+        s_inv = float((1.0 / d["odds_at_bet"].where(d["odds_at_bet"] > 0)).sum())
+        lo = GAP_RATIO / (b["p_model"] * s_inv)
+        lines.append(f"| {b['post_time']} | {b['venue']}{b['race_no']}R {b['race_name']} 芝{b['distance']} | "
+                     f"{b['number']} {b['horse_name']} | {b['odds_at_bet']:.1f}倍 | {b['p_model']:.1%} | "
+                     f"{b['p_market']:.1%} | {b['p_model'] / b['p_market']:.1f}倍 | {lo:.1f}倍以上{GAP_MAX_ODDS:.0f}倍未満 |")
+    lines += ["", "オッズは朝8時半ごろの発売中オッズです。発走直前のオッズが「条件内のオッズ」から外れていたら条件外です。"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"gap picks: {len(picks)} -> {path}", flush=True)
 
 
 def results_for(ids: list[str], fetch: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
