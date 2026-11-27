@@ -183,18 +183,21 @@ def race_ids_on(day: dt.date, f: Fetcher) -> list[str]:
     # The race list answers 400 on days without racing, which the fetcher backs off on for minutes;
     # the month calendar says up front whether there is racing that day.
     url = f"https://race.netkeiba.com/top/calendar.html?year={day:%Y}&month={day.month}"
+    stale = False
     try:
-        cal = f.get(url, f"live/calendar/{day:%Y%m}", encoding="utf-8", refresh=True, tries=2) or ""
+        cal = f.get(url, f"live/calendar/{day:%Y%m}", encoding="utf-8", refresh=True, tries=15, backoff=2) or ""
     except RuntimeError:
-        # The site answers 400 for a while at times; last fetch of the month is good enough to plan the day.
+        # The site answers 400 for a while at times; fall back to the last fetch of the month. It can predate
+        # the day's meeting being listed, so a day missing from it still gets the race list tried below.
+        stale = True
         cal = f.get(url, f"live/calendar/{day:%Y%m}", encoding="utf-8") if f.cached(f"live/calendar/{day:%Y%m}") else ""
     dates = parse.calendar_dates(cal)
-    if dates and f"{day:%Y%m%d}" not in dates:
+    if dates and f"{day:%Y%m%d}" not in dates and not stale:
         return []
     import re
     try:
         html = f.get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={day:%Y%m%d}",
-                     f"live/list/{day:%Y%m%d}", encoding="utf-8", refresh=True, tries=2) or ""
+                     f"live/list/{day:%Y%m%d}", encoding="utf-8", refresh=True, tries=10, backoff=3) or ""
     except RuntimeError:
         html = guess_race_list(day, f) if dates else ""
     ids = sorted(set(re.findall(r"race_id=(\d{12})", html)))
@@ -213,7 +216,7 @@ def guess_race_list(day: dt.date, f: Fetcher) -> str:
         rid = f"{p[:8]}{int(p[8:10]) + 1:02d}01"
         try:
             html = f.get(f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}", f"live/entries/{rid}",
-                         encoding="utf-8", refresh=True) or ""
+                         encoding="utf-8", refresh=True, tries=8, backoff=3) or ""
         except RuntimeError:
             continue
         title = re.search(r"<title>[^<]*?(\d{4})年(\d{1,2})月(\d{1,2})日", html)
@@ -228,7 +231,7 @@ def guess_race_list(day: dt.date, f: Fetcher) -> str:
 def win_odds(race_id: str, f: Fetcher) -> tuple[dict, str]:
     """Win odds by horse number, and where they come from (netkeiba's forecast before sales open)."""
     txt = f.get(f"https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={race_id}&type=1&action=init",
-                f"live/odds/{race_id}", encoding="utf-8", refresh=True) or "{}"
+                f"live/odds/{race_id}", encoding="utf-8", refresh=True, tries=12, backoff=3) or "{}"
     try:
         d = json.loads(txt)
     except json.JSONDecodeError:
@@ -303,7 +306,7 @@ def bet(day: dt.date):
     races = []
     for rid in ids:
         html = f.get(f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}", f"live/entries/{rid}",
-                     encoding="utf-8", refresh=True)
+                     encoding="utf-8", refresh=True, tries=12, backoff=3)
         race = parse.entries(html or "", rid)
         if not race:
             print(rid, "no entries page", flush=True)
