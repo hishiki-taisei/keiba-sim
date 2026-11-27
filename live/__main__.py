@@ -199,7 +199,9 @@ def race_ids_on(day: dt.date, f: Fetcher) -> list[str]:
         html = f.get(f"https://race.netkeiba.com/top/race_list_sub.html?kaisai_date={day:%Y%m%d}",
                      f"live/list/{day:%Y%m%d}", encoding="utf-8", refresh=True, tries=10, backoff=3) or ""
     except RuntimeError:
-        html = guess_race_list(day, f) if dates else ""
+        key = f"live/list/{day:%Y%m%d}"
+        cached = f.get("", key, encoding="utf-8") if f.cached(key) else ""
+        html = cached if re.search(r"race_id=\d{12}", cached or "") else (guess_race_list(day, f) if dates else "")
     ids = sorted(set(re.findall(r"race_id=(\d{12})", html)))
     return [i for i in ids if i[4:6] in parse.VENUES and i[:4] == f"{day:%Y}"]
 
