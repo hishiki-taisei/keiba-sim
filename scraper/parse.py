@@ -249,7 +249,10 @@ def entries(html: str, race_id: str) -> dict | None:
         cells = r.find_all("td")
         txt = [c.get_text(" ", strip=True) for c in cells]
         sexage = next((t for t in txt if re.fullmatch(r"[牡牝セ]\d+", t)), "")
-        weight = next((t for t in txt if re.fullmatch(r"\d{2}(\.\d)?", t)), None)
+        # Carried weight reads like "57.0"; a bare two-digit cell can be the horse number (10-18), so take
+        # those only in the weight range.
+        weight = (next((t for t in txt if re.fullmatch(r"\d{2}\.\d", t)), None)
+                  or next((t for t in txt if re.fullmatch(r"\d{2}", t) and 45 <= int(t) <= 65), None))
         frame = r.select_one("td[class^=Waku]")
         num = r.select_one("td[class^=Umaban]")
         odds = r.select_one("td.Popular span, span[id^=odds-]")
