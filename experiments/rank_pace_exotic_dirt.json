@@ -1,0 +1,49 @@
+{
+ "base": {
+  "trees": 213,
+  "test_logloss": 2.1023,
+  "top_pick_win": 0.2887,
+  "top_pick_in3": 0.6073
+ },
+ "pace": {
+  "trees": 255,
+  "test_logloss": 2.1017,
+  "top_pick_win": 0.2889,
+  "top_pick_in3": 0.6052,
+  "pace_splits": {
+   "early_rank": 57,
+   "style_x_pace": 45,
+   "lead_pos": 43,
+   "style_x_front": 35,
+   "lead_pace": 33,
+   "n_front": 29,
+   "lone_lead": 0,
+   "style_x_lone": 0
+  },
+  "all_splits": 3435
+ },
+ "rank": {
+  "trees": 710,
+  "test_logloss": 2.1043,
+  "top_pick_win": 0.295,
+  "top_pick_in3": 0.6142
+ },
+ "rank_pace": {
+  "trees": 615,
+  "test_logloss": 2.1063,
+  "top_pick_win": 0.2929,
+  "top_pick_in3": 0.6117,
+  "pace_splits": {
+   "style_x_pace": 170,
+   "lead_pos": 159,
+   "early_rank": 137,
+   "n_front": 132,
+   "style_x_front": 127,
+   "lead_pace": 104,
+   "lone_lead": 0,
+   "style_x_lone": 0
+  },
+  "all_splits": 8662
+ },
+ "market_test_logloss": 1.9127
+}
