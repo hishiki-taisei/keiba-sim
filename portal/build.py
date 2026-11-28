@@ -41,12 +41,12 @@ import build_field  # noqa: E402  (one definition of running style for the site 
 
 # Upcoming race shown before its card is in the database.
 KIKKA = {
-    "race_id": "202608050611", "date": "2026-11-22", "venue": "京都", "race_no": 11,
-    "name": "第43回マイルチャンピオンS(GI)", "grade": "G1", "surface": "芝", "distance": 1600,
-    "direction": "右", "course_note": "外", "class_text": "3歳以上オープン (国際)(指)(定量)",
+    "race_id": "202605050812", "date": "2026-11-29", "venue": "東京", "race_no": 12,
+    "name": "第46回ジャパンC(GI)", "grade": "G1", "surface": "芝", "distance": 2400,
+    "direction": "左", "course_note": "", "class_text": "3歳以上オープン (国際)(指)(定量)",
     "start_time": "15:40",
 }
-FEATURED_KEY = "マイルチャンピオンS"
+FEATURED_KEY = "ジャパンC"
 
 # Simplified sire lines, keyed by the sire's sire (or the sire itself).
 LINES = {

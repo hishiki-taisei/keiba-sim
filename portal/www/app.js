@@ -172,7 +172,7 @@ function homeView() {
         <tbody>${rows}</tbody></table></div>
     </div>
     <section style="display:grid;gap:6px">
-      <h2 class="sec">過去のマイルチャンピオンシップ</h2>
+      <h2 class="sec">過去のジャパンカップ</h2>
       <div class="history">${idx.history.slice().reverse().map((r) => `<a href="#r${r.race_id}">${r.date.slice(0, 4)}年（${esc(r.venue)}）</a>`).join("")}</div>
     </section>`;
 }
@@ -487,7 +487,7 @@ function aiView(r) {
     ${hasOdds ? `<td class="r nw">${h.odds ?? "–"}<div class="hs">${h.pop ?? "-"}番人気</div></td>` : ""}
     <td class="r nw"><div class="pbar"><span class="tr wide"><i style="width:${(h.p_ai / max) * 100}%"></i></span><b>${pct(h.p_ai)}</b></div>
       ${h.p_market != null ? `<div class="pbar mk"><span class="tr wide"><i style="width:${(h.p_market / max) * 100}%"></i></span><span class="hs">人気 ${pct(h.p_market)}</span></div>` : ""}</td>
-    ${hasSim ? `<td class="r nw">${h.sim ? `<b>${pct(h.sim.win)}</b><div class="hs">稍重${pct(h.sim.win_soft, 0)}・重${pct(h.sim.win_heavy, 0)}</div>` : "–"}</td>` : ""}
+    ${hasSim ? `<td class="r nw">${h.sim ? `<b>${pct(h.sim.win)}</b>${h.sim.win_soft != null ? `<div class="hs">稍重${pct(h.sim.win_soft, 0)}・重${pct(h.sim.win_heavy, 0)}</div>` : ""}` : "–"}</td>` : ""}
     ${hasAb ? `<td class="r pc">${pct(h.p_ability)}</td>` : ""}
     ${hasOdds ? `<td class="r nw ${e >= 1.1 ? "sp" : ""}">${e != null ? e.toFixed(2) : "–"}</td>` : ""}
     <td class="r">${pct(h.sim?.place ?? h.p_place ?? h.p_sim_place, 0)}</td>
@@ -499,7 +499,7 @@ function aiView(r) {
     ${gap.length ? `過去の走りだけで見たAIと人気の差が大きいのは ${gap.map((h) => `<b>${esc(h.name)}</b>（走りだけ${pct(h.p_ability, 0)}・人気${pct(h.p_market, 0)}）`).join("、")}。` : ""}
     ${r.odds_time ? `<span class="small sub">オッズは${esc(r.odds_time.slice(5, 16).replace("-", "/"))}時点</span>` : ""}
     ${done(r) ? "" : `<button type="button" class="linkbtn" data-tab="bet">買い目タブ</button>に、オッズとAI勝率から見た券種ごとの買い方があります。`}</p>` : ""}
-    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasSim ? `<th class="r">展開シミュ<div class="hs">枠順・道悪込み</div></th>` : ""}${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tw"><table class="aitab"><thead><tr><th class="c">印</th>${hasNum ? `<th class="c">番</th>` : ""}<th>馬名</th>${hasOdds ? `<th class="r">単勝</th>` : ""}<th class="r">${term("AI勝率")}<div class="hs pc">下段は人気から見た勝率</div></th>${hasSim ? `<th class="r">展開シミュ<div class="hs">${hs.some((h) => h.sim?.win_soft != null) ? "枠順・道悪込み" : "枠順・ペース込み"}</div></th>` : ""}${hasAb ? `<th class="r pc">走りだけ<div class="hs">オッズなしのAI</div></th>` : ""}${hasOdds ? `<th class="r">${term("期待値")}</th>` : ""}<th class="r">${term("3着内率")}</th><th class="c pc">データ</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p class="small sub" style="margin:0">${r.pipeline ? `AI勝率は、オッズを使わない新しい予想パイプラインの値です。過去の走りから出した基礎能力に、距離・コース・馬場・騎手などの条件適性と調教評価を足し、枠と脚質からの位置取り、ペース、前日までの馬場傾向を入れて、このレースを重馬場で10万回走らせて数えました。下段の「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。「展開シミュ」の下段は、同じ計算を稍重と重でそれぞれ10万回やり直した勝率です（上段と3着内率は重）。${r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>のレース再生は、このAI勝率どおりに勝つよう強さを合わせた別のシミュレーターです。` : ""}` : `AI勝率は、オッズを出発点に、過去の走りやペースの有利不利からオッズのずれを直した値です。「走りだけ」はオッズを使わず過去の走りだけで出した勝率で、人気とどれだけ違う見方をしているかの参考です（こちらは本命の的中率が1番人気より低い）。「人気から見た勝率」は単勝オッズの逆数を合計100%に直した値です。${hasSim ? `「展開シミュ」は勝率を入力に使わず、馬ごとのスタミナ・末脚・脚質と枠順、道悪の得意不得意からレースを稍重と重で各6000回走らせて数えた勝率です（過去350レースの検証で強気すぎた分をならした値）。` : ""}${hasSim ? "3着内率もこのシミュレーションの値です。" : ""}${r.replay ? `<button type="button" class="linkbtn" data-tab="race">レース再現タブ</button>で、このシミュレーションのレースを1回ずつ見られます。` : r.theater ? `<button type="button" class="linkbtn" data-tab="race">展開タブ</button>のレース再生は、AI勝率どおりに勝つよう強さを合わせた別のシミュレーターです${hasSim ? "" : "（3着内率はその結果）"}。` : ""}`}データの＋－は出馬表のチェック項目の数です。<a href="#about">計算方法</a></p>`;
 }
 
@@ -525,14 +525,14 @@ function babaBlock(r) {
   const day = (b?.same_day || []), dturf = day.filter((x) => x.surface === "芝"), dnow = dturf[dturf.length - 1];
   return `<section class="blk"><h3>馬場と天気</h3>
     <dl class="kv">
-      ${dnow ? `<dt>当日（日）の京都</dt><dd><b>芝 ${esc(GOING[dnow.going] ?? dnow.going)}</b>・天候 ${esc(day[day.length - 1].weather)}<span class="small sub">（${dnow.reported ? `${esc(dnow.reported)}。` : ""}${r.going_time ? `${esc(r.going_time)}に取得した` : ""}netkeibaの各レースの発表。${dturf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
-      ${now ? `<dt>前日（土）の京都</dt><dd><b>芝 ${esc(GOING[now.going] ?? now.going)}</b>・天候 ${esc(last.weather)}<span class="small sub">（${last.r}Rの発表。${turf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
+      ${dnow ? `<dt>当日（日）の${esc(r.venue)}</dt><dd><b>芝 ${esc(GOING[dnow.going] ?? dnow.going)}</b>・天候 ${esc(day[day.length - 1].weather)}<span class="small sub">（${dnow.reported ? `${esc(dnow.reported)}。` : ""}${r.going_time ? `${esc(r.going_time)}に取得した` : ""}netkeibaの各レースの発表。${dturf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
+      ${now ? `<dt>前日（土）の${esc(r.venue)}</dt><dd><b>芝 ${esc(GOING[now.going] ?? now.going)}</b>・天候 ${esc(last.weather)}<span class="small sub">（${last.r}Rの発表。${turf.map((x) => `${x.r}R ${GOING[x.going] ?? x.going}`).join("・")}）</span></dd>` : ""}
       ${f ? `<dt>当日（日）の予報</dt><dd><b>${esc(f.text)}</b><span class="small sub">（${esc(f.as_of)}時点、${f.sources.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`).join("・")}）</span></dd>` : ""}
       ${b?.moisture ? `<dt>芝の含水率</dt><dd>ゴール前 ${b.moisture.turf[0]}%・4コーナー ${b.moisture.turf[1]}%<span class="small sub">（JRA発表の最新値${b.as_of ? `、${esc(b.as_of)}` : ""}）</span></dd>` : ""}
       ${b?.course ? `<dt>使用コース</dt><dd>${esc(b.course)}</dd>` : ""}
       ${b?.turf_note ? `<dt>芝の様子</dt><dd>${esc(b.turf_note)}</dd>` : ""}
     </dl>
-    ${dnow ? `<p style="margin:0">今日の京都芝は<b>${esc(GOING[dnow.going] ?? dnow.going)}</b>の発表です（${dnow.r}Rの時点）。${["重", "不"].includes(dnow.going) ? (r.pipeline ? "AI予想タブのAI勝率は重馬場で計算した値なので、そのまま見てください。" : `下の「雨で重・不良になった場合」の表がそのまま当てはまります。${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、重の列（下段）を重く見てください。" : ""}`) : dnow.going === "良" ? `${r.pipeline ? "AI予想タブのAI勝率は雨で重になる前提で計算しています。良馬場のままなら少し割り引いて見てください。" : (dturf.some((x) => x.going !== "良") ? "朝の道悪から良まで回復しました。" : "良馬場です。")}${!r.pipeline && r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重で計算したもので、良馬場では計算していません。シミュの数字は参考程度に見てください。" : ""}` : dnow.going === "稍" ? `${dturf.some((x) => x.going === "重") ? "朝の重から回復してきています。" : ""}${r.pipeline ? "雨が続く予報なので、AI予想タブのAI勝率は重馬場で計算しています。稍重で計算した勝率も「展開シミュ」の下段にあり、順位はほぼ変わりません。" : r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、稍重の列（上段）を重く見てください。" : ""}` : ""}</p>` : now ? `<p style="margin:0">前日（土）の京都芝は<b>${esc(GOING[now.going] ?? now.going)}</b>でした。${b?.turf ? `JRAの発表（${esc(b.as_of || "")}）も芝${esc(b.turf)}です。` : ""}当日の芝のレースが終わると、ここに当日の発表が出ます。</p>` : ""}
+    ${dnow ? `<p style="margin:0">今日の${esc(r.venue)}芝は<b>${esc(GOING[dnow.going] ?? dnow.going)}</b>の発表です（${dnow.r}Rの時点）。${["重", "不"].includes(dnow.going) ? (r.pipeline ? "AI予想タブのAI勝率は重馬場で計算した値なので、そのまま見てください。" : `下の「雨で重・不良になった場合」の表がそのまま当てはまります。${r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、重の列（下段）を重く見てください。" : ""}`) : dnow.going === "良" ? `${r.pipeline ? "AI予想タブのAI勝率は雨で重になる前提で計算しています。良馬場のままなら少し割り引いて見てください。" : (dturf.some((x) => x.going !== "良") ? "朝の道悪から良まで回復しました。" : "良馬場です。")}${!r.pipeline && r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重で計算したもので、良馬場では計算していません。シミュの数字は参考程度に見てください。" : ""}` : dnow.going === "稍" ? `${dturf.some((x) => x.going === "重") ? "朝の重から回復してきています。" : ""}${r.pipeline ? "雨が続く予報なので、AI予想タブのAI勝率は重馬場で計算しています。稍重で計算した勝率も「展開シミュ」の下段にあり、順位はほぼ変わりません。" : r.horses.some((h) => h.sim) ? "AI予想タブの「展開シミュ」は稍重と重の平均なので、稍重の列（上段）を重く見てください。" : ""}` : ""}</p>` : now ? `<p style="margin:0">前日（土）の${esc(r.venue)}芝は<b>${esc(GOING[now.going] ?? now.going)}</b>でした。${b?.turf ? `JRAの発表（${esc(b.as_of || "")}）も芝${esc(b.turf)}です。` : ""}当日の芝のレースが終わると、ここに当日の発表が出ます。</p>` : ""}
     ${wetTable(r)}</section>`;
 }
 
@@ -777,7 +777,7 @@ function guideView(r) {
   const anyValue = [...win, ...plc, ...umaren, ...wide].some((x) => x.e >= 1.1);
   return `<section class="blk"><h3>オッズとAI勝率から見た買い方</h3>
     <p style="margin:0">期待値は「当たる確率×オッズ」で、100円がAIの見立てで平均いくら戻るかです。JRAの取り分（単勝・複勝20%、馬連・ワイド22.5%）があるので、ふつうの馬券は0.8前後になります。${anyValue ? "<b>1.1を超える買い目（緑）</b>が、AIが人気より高く見ている所です。" : "今のオッズでは1.1を超える買い目はありません。期待値で選ぶなら、このレースは見送りか少額が妥当です。"}</p>
-    <dl class="kv" style="margin-top:6px"><dt>基本の一点</dt><dd>${name(fav)}の複勝${fav.place_odds ? `（${fav.place_odds[0]}〜${fav.place_odds[1]}倍）` : ""}。${r.pipeline ? "先週末（11/7〜8）の69レースでは、AI本命の複勝は的中39回・回収率78%でした。" : "仮想ベット（10/18〜11/21の240レース）では、AI本命の複勝は的中率60%・回収率82%、単勝は的中率34%・回収率83%でした。"}</dd></dl>
+    <dl class="kv" style="margin-top:6px"><dt>基本の一点</dt><dd>${name(fav)}の複勝${fav.place_odds ? `（${fav.place_odds[0]}〜${fav.place_odds[1]}倍）` : ""}。${r.pipeline ? "先週末（11/7〜8）の69レースでは、AI本命の複勝は的中39回・回収率78%でした。" : "仮想ベット（10/18〜11/23の288レース）では、AI本命の複勝は的中率62%・回収率84%、単勝は的中率32%・回収率79%でした。"}</dd></dl>
     ${table("単勝", win, row1, "当たる確率はAI勝率。")}
     ${table("複勝", plc, row1, `当たる確率は3着内率${r.horses.some((h) => h.sim) ? "（展開シミュ）" : "（AI勝率から計算）"}、オッズは下限で計算。`)}
     ${table("馬連（期待値の高い組み合わせ）", umaren, row2, "")}
@@ -851,7 +851,7 @@ function aboutView() {
     <h2 class="sec">わかっている弱点</h2>
     <div class="prose">
       <p>オッズを使わないAIの本命は、1番人気ほど当たりません。オッズ補正後の確率は、オッズそのものより少しだけ正確です（確率の当たり具合を測る対数損失が4,642レースで1.9093→1.9074）。本命が当たる割合はほぼ同じなので、このサイトでは「人気より当てる」ではなく、AIが人気より高く見ている馬（${term("期待値")}が1を超える馬）と、レース展開を見るための道具として使うことを想定しています。</p>
-      <p>マイルチャンピオンシップ（2026年11月22日）と今日のレースのAI勝率は、仮想ベットと同じオッズ補正モデル（offset_pace2）の朝の予想です。マイルCSは、モデルの補正分（AIと人気のずれ）はそのままにして、人気の部分だけ10:58のオッズで計算し直しました。ページを開くたびに最新オッズで同じように動きます。「走りだけ」はオッズを使わない独自モデルです。芝マイルのG1（2015年以降81レース）では、人気馬はオッズどおりに勝っていて、上積みは見られません。</p>
+      <p>ジャパンカップ（2026年11月29日）と今日のレースのAI勝率は、仮想ベットと同じオッズ補正モデル（offset_pace2）の予想です。モデルの補正分（AIと人気のずれ）はそのままにして、人気の部分はページを開くたびに最新オッズで計算し直します。「走りだけ」はオッズを使わない独自モデル、「展開シミュ」は枠順・脚質・ペースを入れて10万回走らせた予想パイプラインの値です。海外から来た馬は日本での出走記録がないか少ないので、独自モデルと展開シミュでは評価が低めに出ます。</p>
       <p>調教とパドックはまだ入っていません。枠順が決まる前の予想では、枠を毎回くじ引きにして平均しています。</p>
     </div>`;
 }

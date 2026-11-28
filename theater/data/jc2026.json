@@ -1,0 +1,1096 @@
+{
+ "title": "ジャパンカップ 2026",
+ "date": "2026-11-29",
+ "course": {
+  "venue": "東京",
+  "surface": "芝",
+  "distance": 2400,
+  "note": "",
+  "direction": ""
+ },
+ "going": "良",
+ "pace": {
+  "early": 16.611,
+  "mid": 16.194,
+  "pre": 16.529,
+  "last600": 17.241,
+  "par_time": 144
+ },
+ "pace_races": 45,
+ "model": {
+  "source": "jc_field_preds.csv",
+  "column": "勝率(モデル)"
+ },
+ "past": [
+  {
+   "date": "2015-11-29",
+   "going": "良",
+   "time": 144.7,
+   "first1000": 59.3,
+   "last600": 35.3,
+   "winner": "ショウナンパンドラ",
+   "winner_last3f": 33.9,
+   "winner_passing": "9-9-8-11"
+  },
+  {
+   "date": "2016-11-27",
+   "going": "良",
+   "time": 145.8,
+   "first1000": 61.7,
+   "last600": 34.7,
+   "winner": "キタサンブラック",
+   "winner_last3f": 34.7,
+   "winner_passing": "1-1-1-1"
+  },
+  {
+   "date": "2017-11-26",
+   "going": "良",
+   "time": 143.7,
+   "first1000": 60.2,
+   "last600": 35.1,
+   "winner": "シュヴァルグラン",
+   "winner_last3f": 34.7,
+   "winner_passing": "5-4-4-4"
+  },
+  {
+   "date": "2018-11-25",
+   "going": "良",
+   "time": 140.6,
+   "first1000": 59.9,
+   "last600": 34.4,
+   "winner": "アーモンドアイ",
+   "winner_last3f": 34.1,
+   "winner_passing": "3-2-2-2"
+  },
+  {
+   "date": "2019-11-24",
+   "going": "重",
+   "time": 145.9,
+   "first1000": 60.3,
+   "last600": 37.2,
+   "winner": "スワーヴリチャード",
+   "winner_last3f": 36.5,
+   "winner_passing": "7-7-6-5"
+  },
+  {
+   "date": "2020-11-29",
+   "going": "良",
+   "time": 143,
+   "first1000": 57.9,
+   "last600": 37.8,
+   "winner": "アーモンドアイ",
+   "winner_last3f": 34.7,
+   "winner_passing": "4-5-4-4"
+  },
+  {
+   "date": "2021-11-28",
+   "going": "良",
+   "time": 144.7,
+   "first1000": 62.2,
+   "last600": 35.3,
+   "winner": "コントレイル",
+   "winner_last3f": 33.7,
+   "winner_passing": "8-7-8-8"
+  },
+  {
+   "date": "2022-11-27",
+   "going": "良",
+   "time": 143.7,
+   "first1000": 61.1,
+   "last600": 34.2,
+   "winner": "ヴェラアズール",
+   "winner_last3f": 33.7,
+   "winner_passing": "11-9-10-10"
+  },
+  {
+   "date": "2023-11-26",
+   "going": "良",
+   "time": 141.8,
+   "first1000": 57.6,
+   "last600": 36.5,
+   "winner": "イクイノックス",
+   "winner_last3f": 33.5,
+   "winner_passing": "3-3-3-3"
+  },
+  {
+   "date": "2024-11-24",
+   "going": "良",
+   "time": 145.5,
+   "first1000": 62.2,
+   "last600": 33.4,
+   "winner": "ドウデュース",
+   "winner_last3f": 32.7,
+   "winner_passing": "13-12-12-7"
+  },
+  {
+   "date": "2025-11-30",
+   "going": "良",
+   "time": 140.3,
+   "first1000": 57.6,
+   "last600": 34.6,
+   "winner": "カランダガン",
+   "winner_last3f": 33.2,
+   "winner_passing": "11-11-10-11"
+  }
+ ],
+ "horses": [
+  {
+   "name": "ヘデントール",
+   "jockey": "マーカンド",
+   "gate": 1,
+   "p_model": 0.0229,
+   "horse_id": "2021105521",
+   "style": 0.616,
+   "move": 0.334,
+   "kick": 0.807,
+   "stamina": 0,
+   "going": -0.019,
+   "form_sd": 0.758,
+   "n_long": 8,
+   "n_soft": 1,
+   "recent": [
+    {
+     "date": "2026-10-04",
+     "race": "第61回京都大賞典(GII)",
+     "distance": 2400,
+     "going": "稍重",
+     "finish": 5,
+     "field": 18,
+     "passing": "14-14-15-17",
+     "last3f": 34.2
+    },
+    {
+     "date": "2026-05-03",
+     "race": "第173回天皇賞(春)(GI)",
+     "distance": 3200,
+     "going": "良",
+     "finish": 5,
+     "field": 15,
+     "passing": "9-9-9-8",
+     "last3f": 35.1
+    },
+    {
+     "date": "2026-02-15",
+     "race": "第119回京都記念(GII)",
+     "distance": 2200,
+     "going": "良",
+     "finish": 8,
+     "field": 12,
+     "passing": "11-11-11-11",
+     "last3f": 33.6
+    },
+    {
+     "date": "2025-05-04",
+     "race": "第171回天皇賞(春)(GI)",
+     "distance": 3200,
+     "going": "良",
+     "finish": 1,
+     "field": 15,
+     "passing": "6-7-6-5",
+     "last3f": 35.3
+    },
+    {
+     "date": "2025-02-22",
+     "race": "第75回ダイヤモンドS(GIII)",
+     "distance": 3400,
+     "going": "良",
+     "finish": 1,
+     "field": 16,
+     "passing": "5-5-5-1",
+     "last3f": 34.9
+    }
+   ],
+   "ability": -0.148
+  },
+  {
+   "name": "コスモキュランダ",
+   "jockey": "丹内",
+   "gate": 2,
+   "p_model": 0.0083,
+   "horse_id": "2021106787",
+   "style": 0.254,
+   "move": -0.094,
+   "kick": -0.716,
+   "stamina": 0.157,
+   "going": -0.072,
+   "form_sd": 0.946,
+   "n_long": 6,
+   "n_soft": 2,
+   "recent": [
+    {
+     "date": "2026-11-01",
+     "race": "第174回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 9,
+     "field": 17,
+     "passing": "3-3-3",
+     "last3f": 34.7
+    },
+    {
+     "date": "2026-09-20",
+     "race": "第72回産経賞オールカマー(GII)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 11,
+     "field": 13,
+     "passing": "6-6-6-10",
+     "last3f": 41.6
+    },
+    {
+     "date": "2026-06-14",
+     "race": "第67回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 4,
+     "field": 17,
+     "passing": "1-1-1-1",
+     "last3f": 36.1
+    },
+    {
+     "date": "2026-03-28",
+     "race": "第74回日経賞(GII)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 7,
+     "field": 15,
+     "passing": "4-3-3-3",
+     "last3f": 36.7
+    },
+    {
+     "date": "2025-12-28",
+     "race": "第70回有馬記念(GI)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 2,
+     "field": 16,
+     "passing": "2-3-2-2",
+     "last3f": 35.5
+    }
+   ],
+   "ability": -0.078
+  },
+  {
+   "name": "メイショウタバル",
+   "jockey": "武豊",
+   "gate": 3,
+   "p_model": 0.1208,
+   "horse_id": "2021103272",
+   "style": 0.12,
+   "move": -0.063,
+   "kick": -0.259,
+   "stamina": -0.216,
+   "going": 0.574,
+   "form_sd": 1.283,
+   "n_long": 6,
+   "n_soft": 3,
+   "recent": [
+    {
+     "date": "2026-06-14",
+     "race": "第67回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 1,
+     "field": 17,
+     "passing": "2-2-2-2",
+     "last3f": 35.3
+    },
+    {
+     "date": "2026-04-05",
+     "race": "第70回大阪杯(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 2,
+     "field": 15,
+     "passing": "1-1-1-1",
+     "last3f": 35.6
+    },
+    {
+     "date": "2025-12-28",
+     "race": "第70回有馬記念(GI)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 13,
+     "field": 16,
+     "passing": "2-2-1-1",
+     "last3f": 36.7
+    },
+    {
+     "date": "2025-11-02",
+     "race": "第172回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 6,
+     "field": 14,
+     "passing": "1-1-1",
+     "last3f": 33.1
+    },
+    {
+     "date": "2025-06-15",
+     "race": "第66回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "稍重",
+     "finish": 1,
+     "field": 17,
+     "passing": "1-1-1-1",
+     "last3f": 36
+    }
+   ],
+   "ability": 0.353
+  },
+  {
+   "name": "クロワデュノール",
+   "jockey": "Ｃデムーロ",
+   "gate": 4,
+   "p_model": 0.1156,
+   "horse_id": "2022105102",
+   "style": 0.34,
+   "move": 0.353,
+   "kick": 0.53,
+   "stamina": 0.098,
+   "going": 0.027,
+   "form_sd": 0.6,
+   "n_long": 4,
+   "n_soft": 1,
+   "recent": [
+    {
+     "date": "2026-11-01",
+     "race": "第174回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 5,
+     "field": 17,
+     "passing": "6-6-6",
+     "last3f": 34.2
+    },
+    {
+     "date": "2026-06-14",
+     "race": "第67回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 2,
+     "field": 17,
+     "passing": "5-5-4-3",
+     "last3f": 35.2
+    },
+    {
+     "date": "2026-05-03",
+     "race": "第173回天皇賞(春)(GI)",
+     "distance": 3200,
+     "going": "良",
+     "finish": 1,
+     "field": 15,
+     "passing": "6-5-5-3",
+     "last3f": 34.9
+    },
+    {
+     "date": "2026-04-05",
+     "race": "第70回大阪杯(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 1,
+     "field": 15,
+     "passing": "8-8-6-4",
+     "last3f": 34.9
+    },
+    {
+     "date": "2025-11-30",
+     "race": "第45回ジャパンC(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 4,
+     "field": 16,
+     "passing": "4-4-4-5",
+     "last3f": 34.4
+    }
+   ],
+   "ability": 0.089
+  },
+  {
+   "name": "シェイクユアハート",
+   "jockey": "古川吉",
+   "gate": 5,
+   "p_model": 0.0142,
+   "horse_id": "2020103101",
+   "style": 0.636,
+   "move": 0.317,
+   "kick": 0.326,
+   "stamina": -0.451,
+   "going": -0.432,
+   "form_sd": 1.067,
+   "n_long": 2,
+   "n_soft": 1,
+   "recent": [
+    {
+     "date": "2026-11-01",
+     "race": "第174回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 6,
+     "field": 17,
+     "passing": "12-12-12",
+     "last3f": 34
+    },
+    {
+     "date": "2026-08-16",
+     "race": "第62回札幌記念(GII)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 1,
+     "field": 16,
+     "passing": "12-10-8-8",
+     "last3f": 34.6
+    },
+    {
+     "date": "2026-06-14",
+     "race": "第67回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 14,
+     "field": 17,
+     "passing": "15-14-14-11",
+     "last3f": 36.9
+    },
+    {
+     "date": "2026-03-15",
+     "race": "第62回東海テレビ杯金鯱賞(GII)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 1,
+     "field": 14,
+     "passing": "11-11-12-10",
+     "last3f": 33.5
+    },
+    {
+     "date": "2026-02-15",
+     "race": "第119回京都記念(GII)",
+     "distance": 2200,
+     "going": "良",
+     "finish": 4,
+     "field": 12,
+     "passing": "7-7-7-6",
+     "last3f": 33.7
+    }
+   ],
+   "ability": -0.163
+  },
+  {
+   "name": "マスカレードボール",
+   "jockey": "ルメール",
+   "gate": 6,
+   "p_model": 0.1249,
+   "horse_id": "2022105519",
+   "style": 0.57,
+   "move": 0.082,
+   "kick": 0.592,
+   "stamina": 0.227,
+   "going": 0,
+   "form_sd": 0.887,
+   "n_long": 2,
+   "n_soft": 0,
+   "recent": [
+    {
+     "date": "2026-11-01",
+     "race": "第174回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 11,
+     "field": 17,
+     "passing": "14-14-14",
+     "last3f": 34.2
+    },
+    {
+     "date": "2025-11-30",
+     "race": "第45回ジャパンC(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 2,
+     "field": 16,
+     "passing": "10-8-9-9",
+     "last3f": 33.4
+    },
+    {
+     "date": "2025-11-02",
+     "race": "第172回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 1,
+     "field": 14,
+     "passing": "9-6-8",
+     "last3f": 32.3
+    },
+    {
+     "date": "2025-06-01",
+     "race": "第92回東京優駿(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 2,
+     "field": 18,
+     "passing": "8-8-7-7",
+     "last3f": 33.7
+    },
+    {
+     "date": "2025-04-20",
+     "race": "第85回皐月賞(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 3,
+     "field": 18,
+     "passing": "11-10-14-13",
+     "last3f": 33.9
+    }
+   ],
+   "ability": 0.105
+  },
+  {
+   "name": "ファイアンクランツ",
+   "jockey": "モレイラ",
+   "gate": 7,
+   "p_model": 0.0079,
+   "horse_id": "2022104720",
+   "style": 0.567,
+   "move": 0.447,
+   "kick": 0.142,
+   "stamina": 0,
+   "going": 0,
+   "form_sd": 1.101,
+   "n_long": 8,
+   "n_soft": 0,
+   "recent": [
+    {
+     "date": "2026-11-08",
+     "race": "第64回アルゼンチン共和国杯(GII)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 8,
+     "field": 18,
+     "passing": "15-15-11-11",
+     "last3f": 33.6
+    },
+    {
+     "date": "2026-05-31",
+     "race": "第140回目黒記念(GII)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 1,
+     "field": 14,
+     "passing": "5-5-5-4",
+     "last3f": 33.7
+    },
+    {
+     "date": "2026-02-21",
+     "race": "第76回ダイヤモンドS(GIII)",
+     "distance": 3400,
+     "going": "良",
+     "finish": 2,
+     "field": 15,
+     "passing": "9-10-10-8",
+     "last3f": 34.4
+    },
+    {
+     "date": "2025-09-15",
+     "race": "第79回朝日セントライト記念(GII)",
+     "distance": 2200,
+     "going": "良",
+     "finish": 12,
+     "field": 12,
+     "passing": "9-9-3-3",
+     "last3f": 36.4
+    },
+    {
+     "date": "2025-06-01",
+     "race": "第92回東京優駿(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 9,
+     "field": 18,
+     "passing": "5-5-4-4",
+     "last3f": 34.9
+    }
+   ],
+   "ability": -0.276
+  },
+  {
+   "name": "オンブズマン",
+   "jockey": "ビュイック",
+   "gate": 8,
+   "p_model": 0.1782,
+   "horse_id": null,
+   "recent": [],
+   "ability": 0.356
+  },
+  {
+   "name": "カランダガン",
+   "jockey": "バルザロー",
+   "gate": 9,
+   "p_model": 0.1341,
+   "horse_id": "2021190001",
+   "style": 0.583,
+   "move": 0,
+   "kick": 0.85,
+   "stamina": 0,
+   "going": 0,
+   "form_sd": 1,
+   "n_long": 1,
+   "n_soft": 0,
+   "recent": [
+    {
+     "date": "2025-11-30",
+     "race": "第45回ジャパンC(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 1,
+     "field": 16,
+     "passing": "11-11-10-11",
+     "last3f": 33.2
+    }
+   ],
+   "ability": 0.143
+  },
+  {
+   "name": "ミニーホーク",
+   "jockey": "ムーア",
+   "gate": 10,
+   "p_model": 0.0486,
+   "horse_id": null,
+   "recent": [],
+   "ability": 0.166
+  },
+  {
+   "name": "ヴェルテンベルク",
+   "jockey": "横山典",
+   "gate": 11,
+   "p_model": 0.0078,
+   "horse_id": "2020103060",
+   "style": 0.703,
+   "move": 0.577,
+   "kick": 0.448,
+   "stamina": 0.447,
+   "going": -0.105,
+   "form_sd": 0.663,
+   "n_long": 6,
+   "n_soft": 2,
+   "recent": [
+    {
+     "date": "2026-10-04",
+     "race": "第61回京都大賞典(GII)",
+     "distance": 2400,
+     "going": "稍重",
+     "finish": 7,
+     "field": 18,
+     "passing": "17-17-16-7",
+     "last3f": 34.9
+    },
+    {
+     "date": "2026-05-03",
+     "race": "第173回天皇賞(春)(GI)",
+     "distance": 3200,
+     "going": "良",
+     "finish": 2,
+     "field": 15,
+     "passing": "15-15-15-12",
+     "last3f": 34.3
+    },
+    {
+     "date": "2026-02-21",
+     "race": "第76回ダイヤモンドS(GIII)",
+     "distance": 3400,
+     "going": "良",
+     "finish": 4,
+     "field": 15,
+     "passing": "11-12-13-12",
+     "last3f": 34.4
+    },
+    {
+     "date": "2025-12-06",
+     "race": "第59回ステイヤーズS(GII)",
+     "distance": 3600,
+     "going": "良",
+     "finish": 6,
+     "field": 14,
+     "passing": "8-8-7-6",
+     "last3f": 34
+    },
+    {
+     "date": "2025-10-05",
+     "race": "第60回京都大賞典(GII)",
+     "distance": 2400,
+     "going": "稍重",
+     "finish": 7,
+     "field": 18,
+     "passing": "12-12-15-14",
+     "last3f": 34.5
+    }
+   ],
+   "ability": -0.275
+  },
+  {
+   "name": "テアオ",
+   "jockey": "Ｌトーレス",
+   "gate": 12,
+   "p_model": 0.0246,
+   "horse_id": null,
+   "recent": [],
+   "ability": 0.096
+  },
+  {
+   "name": "アーバンシック",
+   "jockey": "プーシャン",
+   "gate": 13,
+   "p_model": 0.0085,
+   "horse_id": "2021105436",
+   "style": 0.632,
+   "move": 0.452,
+   "kick": 0.162,
+   "stamina": 0.327,
+   "going": 0.051,
+   "form_sd": 1.213,
+   "n_long": 5,
+   "n_soft": 3,
+   "recent": [
+    {
+     "date": "2026-08-30",
+     "race": "第62回新潟記念(GIII)",
+     "distance": 2000,
+     "going": "稍重",
+     "finish": 5,
+     "field": 11,
+     "passing": "8-6",
+     "last3f": 34
+    },
+    {
+     "date": "2026-03-15",
+     "race": "第62回東海テレビ杯金鯱賞(GII)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 14,
+     "field": 14,
+     "passing": "9-10-8-8",
+     "last3f": 34.7
+    },
+    {
+     "date": "2025-11-02",
+     "race": "第172回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 5,
+     "field": 14,
+     "passing": "12-11-11",
+     "last3f": 32.2
+    },
+    {
+     "date": "2025-06-15",
+     "race": "第66回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "稍重",
+     "finish": 14,
+     "field": 17,
+     "passing": "14-14-12-10",
+     "last3f": 37.3
+    },
+    {
+     "date": "2025-03-29",
+     "race": "第73回日経賞(GII)",
+     "distance": 2500,
+     "going": "稍重",
+     "finish": 3,
+     "field": 15,
+     "passing": "9-10-8-7",
+     "last3f": 36.6
+    }
+   ],
+   "ability": -0.374
+  },
+  {
+   "name": "タガノデュード",
+   "jockey": "Ｍデムーロ",
+   "gate": 14,
+   "p_model": 0.0092,
+   "horse_id": "2021106548",
+   "style": 0.814,
+   "move": 0.452,
+   "kick": 0.629,
+   "stamina": 0.034,
+   "going": 0.034,
+   "form_sd": 0.764,
+   "n_long": 3,
+   "n_soft": 1,
+   "recent": [
+    {
+     "date": "2026-11-01",
+     "race": "第174回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 4,
+     "field": 17,
+     "passing": "16-17-17",
+     "last3f": 33.3
+    },
+    {
+     "date": "2026-09-12",
+     "race": "第77回チャレンジC(GIII)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 11,
+     "field": 15,
+     "passing": "14-14-14-13",
+     "last3f": 34.7
+    },
+    {
+     "date": "2026-06-14",
+     "race": "第67回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 5,
+     "field": 17,
+     "passing": "18-18-17-16",
+     "last3f": 35.2
+    },
+    {
+     "date": "2026-05-03",
+     "race": "第173回天皇賞(春)(GI)",
+     "distance": 3200,
+     "going": "良",
+     "finish": 6,
+     "field": 15,
+     "passing": "13-13-13-12",
+     "last3f": 35.2
+    },
+    {
+     "date": "2026-04-05",
+     "race": "第70回大阪杯(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 4,
+     "field": 15,
+     "passing": "13-13-12-7",
+     "last3f": 34.8
+    }
+   ],
+   "ability": -0.183
+  },
+  {
+   "name": "エキサイトバイオ",
+   "jockey": "荻野極",
+   "gate": 15,
+   "p_model": 0.0051,
+   "horse_id": "2022104614",
+   "style": 0.348,
+   "move": 0.295,
+   "kick": 0.453,
+   "stamina": -0.233,
+   "going": 0.094,
+   "form_sd": 0.6,
+   "n_long": 2,
+   "n_soft": 2,
+   "recent": [
+    {
+     "date": "2025-12-28",
+     "race": "第70回有馬記念(GI)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 8,
+     "field": 16,
+     "passing": "10-9-8-7",
+     "last3f": 35.5
+    },
+    {
+     "date": "2025-10-26",
+     "race": "第86回菊花賞(GI)",
+     "distance": 3000,
+     "going": "稍重",
+     "finish": 3,
+     "field": 18,
+     "passing": "4-5-2-1",
+     "last3f": 35.7
+    },
+    {
+     "date": "2025-06-29",
+     "race": "第74回ラジオNIKKEI賞(GIII)",
+     "distance": 1800,
+     "going": "良",
+     "finish": 1,
+     "field": 14,
+     "passing": "7-8-7-7",
+     "last3f": 34.8
+    },
+    {
+     "date": "2025-05-17",
+     "race": "あずさ賞(1勝)",
+     "distance": 2000,
+     "going": "不良",
+     "finish": 2,
+     "field": 10,
+     "passing": "2-3-4-2",
+     "last3f": 35.5
+    },
+    {
+     "date": "2025-03-30",
+     "race": "3歳未勝利",
+     "distance": 2000,
+     "going": "良",
+     "finish": 1,
+     "field": 13,
+     "passing": "2-2-2-2",
+     "last3f": 34.8
+    }
+   ],
+   "ability": 0.027
+  },
+  {
+   "name": "ダノンデサイル",
+   "jockey": "戸崎圭",
+   "gate": 16,
+   "p_model": 0.1461,
+   "horse_id": "2021105143",
+   "style": 0.525,
+   "move": -0.06,
+   "kick": 0.842,
+   "stamina": -0.108,
+   "going": -0.021,
+   "form_sd": 0.6,
+   "n_long": 6,
+   "n_soft": 1,
+   "recent": [
+    {
+     "date": "2026-11-01",
+     "race": "第174回天皇賞(秋)(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 1,
+     "field": 17,
+     "passing": "14-16-16",
+     "last3f": 32.9
+    },
+    {
+     "date": "2026-06-14",
+     "race": "第67回宝塚記念(GI)",
+     "distance": 2200,
+     "going": "重",
+     "finish": 3,
+     "field": 17,
+     "passing": "11-12-12-9",
+     "last3f": 35
+    },
+    {
+     "date": "2026-04-05",
+     "race": "第70回大阪杯(GI)",
+     "distance": 2000,
+     "going": "良",
+     "finish": 3,
+     "field": 15,
+     "passing": "6-6-6-7",
+     "last3f": 34.9
+    },
+    {
+     "date": "2025-12-28",
+     "race": "第70回有馬記念(GI)",
+     "distance": 2500,
+     "going": "良",
+     "finish": 3,
+     "field": 16,
+     "passing": "9-9-8-7",
+     "last3f": 35
+    },
+    {
+     "date": "2025-11-30",
+     "race": "第45回ジャパンC(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 3,
+     "field": 16,
+     "passing": "8-8-10-9",
+     "last3f": 33.8
+    }
+   ],
+   "ability": 0.326
+  },
+  {
+   "name": "ゴリアット",
+   "jockey": "スミヨン",
+   "gate": 17,
+   "p_model": 0.0139,
+   "horse_id": "2020190005",
+   "style": 0.558,
+   "move": 0.769,
+   "kick": 0,
+   "stamina": 0,
+   "going": 0,
+   "form_sd": 1,
+   "n_long": 1,
+   "n_soft": 0,
+   "recent": [
+    {
+     "date": "2024-11-24",
+     "race": "第44回ジャパンC(GI)",
+     "distance": 2400,
+     "going": "良",
+     "finish": 6,
+     "field": 14,
+     "passing": "9-3-4-4",
+     "last3f": 33.5
+    }
+   ],
+   "ability": -0.169
+  },
+  {
+   "name": "エシカルダイヤモンド",
+   "jockey": "坂井",
+   "gate": 18,
+   "p_model": 0.0092,
+   "horse_id": null,
+   "recent": [],
+   "ability": 0.005
+  }
+ ],
+ "speed_scale": 1.0040690699372006,
+ "calibration": {
+  "races_per_round": 4000,
+  "rounds": 16,
+  "check_races": 8000,
+  "median_win_time": 144,
+  "par_time": 144,
+  "mean_gap": 0.0018,
+  "largest_gap": 0.0066,
+  "win": [
+   0.0244,
+   0.0109,
+   0.1255,
+   0.109,
+   0.0144,
+   0.1246,
+   0.0083,
+   0.1811,
+   0.1334,
+   0.0461,
+   0.0099,
+   0.0231,
+   0.0084,
+   0.0104,
+   0.0041,
+   0.145,
+   0.0113,
+   0.0103
+  ],
+  "place": [
+   0.1064,
+   0.042,
+   0.306,
+   0.3404,
+   0.0561,
+   0.3511,
+   0.0345,
+   0.4089,
+   0.3541,
+   0.1689,
+   0.0558,
+   0.1029,
+   0.0351,
+   0.058,
+   0.0288,
+   0.4475,
+   0.054,
+   0.0496
+  ]
+ }
+}

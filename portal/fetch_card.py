@@ -20,16 +20,17 @@ ROOT = Path(__file__).resolve().parent
 CARD = "https://race.netkeiba.com/race/shutuba.html?race_id={}"
 ODDS = "https://race.netkeiba.com/api/api_get_jra_odds.html?race_id={}&type={}&action=update"
 BABA = "https://www.jra.go.jp/keiba/baba/index2.html"  # 京都 (index.html is 東京)
+BABA_OF = {"05": "https://www.jra.go.jp/keiba/baba/index.html", "08": "https://www.jra.go.jp/keiba/baba/index2.html"}
 HEADERS = {"User-Agent": "Mozilla/5.0 (keiba-sim portal)"}
 RESULT = "https://race.netkeiba.com/race/result.html?race_id={}"
 
 
-def baba(text):
+def baba(text, src=BABA):
     """JRA's track page -> going, moisture and the week's weather (one dict)."""
     t = re.sub(r"<script.*?</script>|<style.*?</style>", "", text, flags=re.S)
     t = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", t)))
-    out = {"source": BABA}
-    m = re.search(r"(第\d+回京都競馬第\d+日) （(.+?)） 馬場状態 （(.+?)現在） .*?天候： (\S+) 芝 (\S+) ダート (\S+)", t)
+    out = {"source": src}
+    m = re.search(r"(第\d+回\S+?競馬第\d+日) （(.+?)） 馬場状態 （(.+?)現在） .*?天候： (\S+) 芝 (\S+) ダート (\S+)", t)
     if m:
         out.update(meeting=m[1], day=m[2], as_of=m[3], weather=m[4], turf=m[5], dirt=m[6])
     m = re.search(r"ゴール前 4コーナー 芝 ([\d.]+) ([\d.]+) ダート ([\d.]+) ([\d.]+)", t)
@@ -98,9 +99,10 @@ def main():
         odds["time"] = d.get("official_datetime")
     (out / "odds.json").write_text(json.dumps(odds, ensure_ascii=False))
 
-    r = None if args.no_baba else requests.get(BABA, headers=HEADERS, timeout=30)
+    src = BABA_OF.get(args.race_id[4:6], BABA)
+    r = None if args.no_baba else requests.get(src, headers=HEADERS, timeout=30)
     if r is not None and r.ok:
-        b = baba(r.content.decode("shift_jis", "replace"))
+        b = baba(r.content.decode("shift_jis", "replace"), src)
         b["day_before"] = day_going(args.race_id, 1)
         b["same_day"] = day_going(args.race_id, 0)
         (out / "baba.json").write_text(json.dumps(b, ensure_ascii=False))
