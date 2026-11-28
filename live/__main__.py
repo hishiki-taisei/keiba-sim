@@ -64,6 +64,7 @@ STRATEGIES = {  # key: (group, label)
     "value_win": ("オッズ準拠モデル", "期待値買い（単勝）"),
     "indep_win": ("独自モデル", "本命の単勝"), "indep_place": ("独自モデル", "本命の複勝"),
     "claude_gap_win": ("Claudeの買い方", "独自モデルが市場の3倍評価（単勝）"),
+    "claude_gap_win_late": ("Claudeの買い方", "3倍評価・発走15分前に判断（単勝）"),
     "claude_dirt_place": ("Claudeの買い方", "ダート1番人気＋好材料2つ以上（複勝）"),
     "claude_dirt_win": ("Claudeの買い方", "ダート1番人気＋好材料3つ以上（単勝）"),
 }
@@ -77,6 +78,7 @@ BET_COLS = ["date", "race_id", "venue", "race_no", "post_time", "race_name", "su
             "strategy", "bet_type", "number", "horse_name", "stake", "p_model", "p_market", "odds_at_bet", "odds_source",
             "placed_at", "model", "settled", "finish", "final_odds", "payout"]
 ODDS_SOURCE = {"yoso": "予想オッズ", "middle": "発売中オッズ", "result": "確定オッズ"}
+LATE_LEAD = 15  # minutes before the off for the pre-race decision
 GOING_NORM = {"稍": "稍重", "不": "不良"}
 
 
@@ -426,6 +428,91 @@ def write_gap_notice(day: dt.date, picks: list[dict], preds: list[dict]):
     print(f"gap picks: {len(picks)} -> {path}", flush=True)
 
 
+def prerace(day: dt.date, horizon: int = 75, lead: int = LATE_LEAD):
+    """The turf 3x rule decided shortly before each off: for races whose decision time (post - lead)
+    falls within the next ``horizon`` minutes, wait until then, take the odds again and record the
+    picks as claude_gap_win_late. Prints NOTIFY lines for the person who buys them for real."""
+    import time
+    f = Fetcher(ROOT / "data" / "raw", interval=1.2)
+    ids = race_ids_on(day, f)
+    if not ids:
+        print(f"{day}: JRAの開催なし", flush=True)
+        return
+    now = now_jst()
+    races = []
+    for rid in ids:
+        key = f"live/entries/{rid}"
+        try:
+            html = f.get(f"https://race.netkeiba.com/race/shutuba.html?race_id={rid}", key,
+                         encoding="utf-8", refresh=not f.cached(key), tries=12, backoff=3)
+        except RuntimeError:
+            print(rid, "entries unavailable", flush=True)
+            continue
+        race = parse.entries(html or "", rid)
+        if not race or race["surface"] != GAP_SURFACE or not race.get("post_time"):
+            continue
+        start = dt.datetime.combine(day, dt.time.fromisoformat(race["post_time"].zfill(5)), JST)
+        decide = start - dt.timedelta(minutes=lead)
+        if now - dt.timedelta(minutes=10) <= decide < now + dt.timedelta(minutes=horizon):
+            race.update(date=day.isoformat(), start=start, decide=decide,
+                        horses=[dict(h, odds=np.nan) for h in race["horses"] if not h["scratched"]])
+            races.append(race)
+    marker = OUT / "late" / f"{day.isoformat()}.txt"  # races already decided, picks or not
+
+    def decided() -> set:
+        return set(marker.read_text().split()) if marker.exists() else set()
+
+    races = [r for r in races if r["race_id"] not in decided()]
+    print(f"{day}: {len(races)} turf races to decide in the next {horizon} min", flush=True)
+    if not races:
+        return
+    model = load_model(GAP_SURFACE, indep=True)[0]
+    rows = entry_rows(load_runs(LOCAL_DB, surface=GAP_SURFACE), races)
+    for race in sorted(races, key=lambda r: r["decide"]):
+        wait = (race["decide"] - now_jst()).total_seconds()
+        if wait > 0:
+            time.sleep(wait)
+        rid = race["race_id"]
+        if rid in decided():  # another run got there first
+            continue
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        with open(marker, "a") as fh:
+            fh.write(rid + "\n")
+        try:
+            odds, status = win_odds(rid, f)
+        except RuntimeError:
+            print(rid, "odds unavailable, skipped", flush=True)
+            continue
+        d = rows[(rows["race_id"] == rid) & rows["number"].isin(list(odds))].copy()
+        if d.empty:
+            continue
+        d["odds"] = d["number"].map(odds)
+        d["p_market"] = evaluate.market_probs(d)
+        d["p_indep"] = model.predict(d)
+        s_inv = float((1.0 / d["odds"]).sum())
+        stamp = now_jst()
+        new = []
+        for _, h in d.iterrows():
+            if h["p_indep"] >= GAP_RATIO * h["p_market"] and h["odds"] < GAP_MAX_ODDS:
+                new.append({"date": day.isoformat(), "race_id": rid, "venue": parse.VENUES[rid[4:6]],
+                            "race_no": int(rid[-2:]), "post_time": race["post_time"],
+                            "race_name": race["title"].replace(" 出馬表", ""), "surface": GAP_SURFACE,
+                            "distance": race["distance"], "strategy": "claude_gap_win_late", "bet_type": "単勝",
+                            "number": int(h["number"]), "horse_name": h["horse_name"], "stake": STAKE,
+                            "p_model": round(float(h["p_indep"]), 4), "p_market": round(float(h["p_market"]), 4),
+                            "odds_at_bet": h["odds"], "odds_source": f"発走{lead}分前オッズ",
+                            "placed_at": stamp.isoformat(timespec="seconds"), "model": "indep",
+                            "settled": False, "finish": None, "final_odds": None, "payout": None})
+                lo = GAP_RATIO / (h["p_indep"] * s_inv)
+                print(f"NOTIFY {race['post_time']} {parse.VENUES[rid[4:6]]}{int(rid[-2:])}R "
+                      f"{race['title'].replace(' 出馬表', '')} 芝{race['distance']} | {int(h['number'])} {h['horse_name']} | "
+                      f"{h['odds']:.1f}倍 | 独自{h['p_indep']:.1%} 市場{h['p_market']:.1%} 差{h['p_indep'] / h['p_market']:.1f}倍 | "
+                      f"条件内 {lo:.1f}〜{GAP_MAX_ODDS:.0f}倍", flush=True)
+        if new:
+            write_bets(pd.concat([read_bets(), pd.DataFrame(new)], ignore_index=True))
+        print(f"{rid} decided at {stamp:%H:%M}: {len(new)} picks", flush=True)
+
+
 def results_for(ids: list[str], fetch: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Results and win/place payouts for these races: from the DB, else from race.netkeiba.com's
     result page (up the same evening; db.netkeiba.com can lag by days). Web results are kept
@@ -650,13 +737,17 @@ def write_daily(day: str, b: pd.DataFrame):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="python3 -m live")
-    ap.add_argument("cmd", choices=["morning", "night", "bet", "settle", "train", "report", "update"])
+    ap.add_argument("cmd", choices=["morning", "night", "bet", "settle", "train", "report", "update", "prerace"])
+    ap.add_argument("--horizon", type=int, default=75)
     ap.add_argument("--date", type=dt.date.fromisoformat, default=None)
     ap.add_argument("--no-train", action="store_true")
     a = ap.parse_args(argv)
     day = a.date or now_jst().date()
     OUT.mkdir(parents=True, exist_ok=True)
     sync_in()
+    if a.cmd == "prerace":
+        prerace(day, horizon=a.horizon)
+        return
     if a.cmd in ("morning", "bet"):
         if load_model("芝")[0] is None:
             train()
